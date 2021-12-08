@@ -5,9 +5,9 @@ if nargin ==3
     
     P = varargin{1};
     M = varargin{2};
-    U = varargin{3};
+    Z = varargin{3};
     
-    y = observation_function(P,M,U);
+    y = observation_function(P,M,Z);
 else
     y = [];
     [pE,pC] = observation_priors() ;
@@ -17,9 +17,19 @@ end
 end
 
 
-function [y] = observation_function(P,M,U)
-
-    y=spm_int_sparse(P,M,U);
+function [y] = observation_function(P,M,Z)
+    % These are the default settings for M, uncomment and change to customize hemodynamics:
+    %    M = struct()
+    %    M.x = [0;0;0;0];
+    %    M.f = 'spm_prf_fx';
+    %    M.g = 'spm_prf_gx';
+    %    M.n=4;
+    %    M.u=1;
+    %    M.l=1; 
+    %    M.m=1;
+    %    M.u=0;
+    
+    y=spm_int_sparse(P,M,Z);
 end
 
 function [pE,pC] = observation_priors()

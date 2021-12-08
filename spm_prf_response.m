@@ -133,7 +133,8 @@ else
 %                 catch
 %                 end
 %             end
-%             
+%           
+            P = cpm_get_true_parameters(P,M,U);
             varargout{1} = P;
         case 'get_summary'
             % Get a summary of the pRF shape under Gaussian assumptions
@@ -172,8 +173,28 @@ function W = get_response(P,M,U)
 % P  - parameters
 % coords - coordinates (tau,eps,eta)
 
-receptive_field = M.cpm.RF_fun;
-W = feval(receptive_field,P,M,U);
+[true_P, tm_names, ts_names] = cpm_get_true_parameters(P,M,U);
 
+p_names = fieldnames(U(1).grid);
+
+true_parameters = struct();
+for i=1:length(tm_names)
+    moment_vec = [];
+    for j=1:length(p_names)
+        VL_true = [ tm_names{i} '_' p_names{j} ];
+        moment_vec(j)=true_P.(VL_true);
+    end
+    true_parameters.(tm_names{i}) = moment_vec;
+end
+
+for i=1:length(ts_names);
+    true_parameters.(ts_names{i})=true_P.(ts_names{i});
+end
+
+receptive_field = M.cpm.RF_fun;
+get_W = feval(receptive_field);
+coords = U(1).gridpoints;
+
+W = get_W(coords',true_parameters);
 
 end

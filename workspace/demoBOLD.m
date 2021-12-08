@@ -3,8 +3,6 @@
 clear()
 %% Load data
 file="tsvfile1.tsv";
-load('SPM.mat');
-load('simulation_VOI_0.mat');
 dt = 0.074;
 [trial_n, timestep_n, stimuli_n, S, stimuli, C, onsets] = cpm_prepare_experiment_data(file);
 durations = ones(3 * trial_n, 1) .* 2 .* dt;
@@ -42,14 +40,16 @@ fixedparams.TR=SPM.xY.RT;
 fixedparams.nscans=SPM.nscan;
 
 % make sure to change output file name if you change grid structure
-output_file = 'workspace/U_BOLD.mat'; % cpm_precompute does not overwrite an existing file
+output_file = 'workspace/U_BOLD_0.mat'; % cpm_precompute does not overwrite an existing file
 
 U = cpm_precompute(model,grid,fixedparams,data,output_file);
 %% specify a PRF 
 
+load('SPM.mat');
+load('simulation_VOI_0.mat');
 y=xY.y;               % timeseries
 XYZmm=xY.XYZmm;       % locations
-options.name='bold'; % PRF file tag
+options.name='BOLD'; % PRF file tag
 options.TE=0.03;      % Echo time (you may add other options from BayespRF)
 outpath='workspace';  % PRF file path
 
@@ -59,13 +59,13 @@ RFfun = []; % user defined receptive field model, defaults to Gaussian
 PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath);
 
 %% simulating one voxel using CPM
-noise = 0.015;
-%IMPORTANT: change the variables inside cpm_simulate to conform to the ones in
-%the PRF structure
-onevoxel = cpm_simulate(PRF,2707,noise); %this function is hardcoded for 1 voxel, I use latent parameters as much as possible to avoid headaches
-
-y(:,1)=onevoxel;
-PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath); % updating timeseries
+% noise = 0;
+% %IMPORTANT: change the variables inside cpm_simulate to conform to the ones in
+% %the PRF structure
+% onevoxel = cpm_simulate(PRF,2707,noise); %this function is hardcoded for 1 voxel, I use latent parameters as much as possible to avoid headaches
+% 
+% y(:,1)=onevoxel;
+% PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath); % updating timeseries
 
 %% estimating one voxel
 

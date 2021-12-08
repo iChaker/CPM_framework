@@ -39,6 +39,7 @@ U = cpm_precompute(model,grid,fixedparams,data,output_file);
 
 load('SPM.mat');
 load('simulation_VOI_0.mat');
+
 y=xY.y;               % timeseries
 XYZmm=xY.XYZmm;       % locations
 options.name='RPE'; % PRF file tag
@@ -51,14 +52,14 @@ RFfun = []; % user defined receptive field model, defaults to Gaussian
 PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath);
 
 %% simulating one voxel using CPM
-noise = 0.015;
-onevoxel = cpm_simulate(PRF,2707,noise); %this function is hardcoded for 1 voxel, I use latent parameters as much as possible to avoid headaches
-y(:,1)=onevoxel;
-PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath); % updating timeseries
+% noise = 0.015;
+% onevoxel = cpm_simulate(PRF,2707,noise); %this function is hardcoded for 1 voxel, I use latent parameters as much as possible to avoid headaches
+% y(:,1)=onevoxel;
+% PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath); % updating timeseries
 
 %% estimating one voxel
 
-voxels = [1];
+voxels = [];
 PRFn = cpm_estimate(PRF,voxels);
 RE= spm_prf_response(PRFn.Ep{1,1},PRFn.M,PRFn.U,'get_parameters') % display estimated latent parameters for voxel 1
 

@@ -10,13 +10,34 @@ xY.XYZmm=XYZmm;
 VOI.Y=y; % no eigen summary method
 VOI.xY=xY;
 
-p_names = fieldnames(U(1).grid);
 % priors -------------------------------------------------
 
 if isempty(receptive_field)
     receptive_field='cpm_RF_Gaussian';
 end
- [~,~,~,pE,pC] = feval(receptive_field,p_names);
+[~,~,~,fn_lmoment_priors,fn_lscaling_priors] =  feval(receptive_field);
+[mpE,mpC] = fn_lmoment_priors();
+[spE,spC] = fn_lscaling_priors();
+pE = struct();
+pC = struct();
+p_names = fieldnames(U(1).grid);
+m_names = fieldnames(mpE);
+s_names = fieldnames(spE);
+for j=1:length(m_names)
+    for i=1:length(p_names)
+        VLparam = [ m_names{j} '_' p_names{i} ];
+        pE.(VLparam) = mpE.(m_names{j});
+        pC.(VLparam) = mpC.(m_names{j});
+    end
+end
+
+for i=1:length(s_names)
+    pE.(s_names{i}) = spE.(s_names{i});
+    pC.(s_names{i}) = spC.(s_names{i});
+end
+    
+    
+
 
 
 %options
