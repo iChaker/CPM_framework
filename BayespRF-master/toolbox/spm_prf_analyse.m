@@ -349,6 +349,12 @@ bins_per_second = 1 / U(1).dt;
 bins_per_TR     = bins_per_second * TR;
 nscans          = size(Y.y,1);
 
+if ~floor(bins_per_TR)==bins_per_TR
+    
+    warning('Bins per TR is not an integer value, please check dt and TR input values');
+    bins_per_TR = round(bins_per_TR);
+    
+end
 for t = 1:length(U)
     start_bin = ceil( U(t).ons / U(t).dt) + 1;
     end_bin   = start_bin + (U(t).dur * bins_per_second) - 1;
@@ -691,10 +697,14 @@ if isfield(options,'P') && ~isempty(options.P)
     M.P = options.P;
 end
 
+try 
+    M.cpm = options.cpm; 
+catch
+    disp('cpm functions not specified')
+end
 % Model spec
 M.f  = 'spm_prf_fx';
 M.g  = 'spm_prf_gx';
-M.cpm = options.cpm;
 M.x = zeros(4,1);   % Initial hemodynamic state
 M.m = 1;            % Number of inputs
 M.n = length(M.x);  % Number of states
@@ -705,6 +715,7 @@ M.ns = ns;
 M.TE = options.TE;
 M.hE = options.hE;
 M.T0 = max(ceil(options.delays / M.dt),1);
+
 
 % -------------------------------------------------------------------------
 function save_prf(PRFs, parent_folder)
