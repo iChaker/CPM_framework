@@ -87,23 +87,39 @@ if nargin < 4
     % Neural timeseries. A vector with one entry per microtime bin. The 
     % U.nbins field is injected automatially by spm_prf_analyse
     nbins = max(U(1).nbins, max(U(end).ind));
-    z = zeros(1,nbins);
+
     
     
     
     
-    W = get_response(P,M,U);
+    coords = U(1).gridpoints;
+    W = get_response(P,M,U,coords);
     
-        
-    for t = 1:n    
-        % Microtime index for this volume
-        ind = U(t).ind;  
-        
-        resp = U(t).signals1D' .* W;
-        z(ind) = z(ind) + sum(resp);
-        
+    try 
+        mc = U(1).microtime ;
+    catch
+        mc = true ;
     end
-            
+    
+    if mc
+        z = zeros(1,nbins);
+        for t = 1:n    
+            % Microtime index for this volume
+            ind = U(t).ind;  
+
+            resp = U(t).signals1D' .* W;
+            z(ind) = z(ind) + sum(resp);
+
+        end
+    else
+        z = zeros(n,1);
+        for t = 1:n    
+            % Microtime index for this volume    
+            resp = U(t).signals1D' .* W;
+            z(t) = sum(resp);
+        end
+    end
+        
     % Integrate the BOLD model
     Z.u=z';
     Z.dt=M.dt;
@@ -119,21 +135,7 @@ else
 
     switch action         
         case 'get_parameters'
-            % Get the parameters with any corrections needed for 
-            % display      
-%             try
-%                 P.mu_tau
-%             catch
-%                 lP = P;
-%                 P = transform_latent_parameters(lP,U);
-%                 try
-%                 P.transit = lP.transit;
-%                 P.decay   = lP.decay;
-%                 P.epsilon = lP.epsilon;
-%                 catch
-%                 end
-%             end
-%           
+            % Get the parameters with any corrections needed for         
             P = cpm_get_true_parameters(P,M,U);
             varargout{1} = P;
         case 'get_summary'
@@ -146,8 +148,11 @@ else
             varargout{1} = 1;
         case 'get_response'            
             % Return the prediction of the model at coordinates xy            
-            xy = varargin{2};            
-            varargout{1} = ones(1,length(xy));            
+            coords = varargin{2};            
+                
+                
+                
+            varargout{1} = get_response(P,M,U,coords);         
         case 'get_priors'
             % Return a structure containing the priors
             pE.alpha = 1;
@@ -167,7 +172,7 @@ end
 end
 
 % -------------------------------------------------------------------------
-function W = get_response(P,M,U)
+function W = get_response(P,M,U,coords)
 % Get PRF response to a stimulus 
 %
 % P  - parameters
@@ -193,7 +198,6 @@ end
 
 receptive_field = M.cpm.RF_fun;
 get_W = feval(receptive_field);
-coords = U(1).gridpoints;
 
 W = get_W(coords',true_parameters);
 
