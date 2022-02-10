@@ -1,6 +1,18 @@
 function U = cpm_precompute(model,grid,fixedparams,data,precomp_file)
-%CPM_PRECOMPUTE Summary of this function goes here
-%   Detailed explanation goes here
+% cpm_precompute Summary of this function goes here
+%   INPUTS:
+%       -model: name computational model of interest. The user would 
+%               implement this function. See cpm_grid_template for details.
+%       -grid: a structure that defines the grid over the parameter space
+%       (grid.parami = [parami_min parami_max N_points]. The fieldnames
+%       should correspond with the parameters used in the computational model function
+%       -fixedparams: hyperparameters that are passed to the computational model
+%       -data: stimulus data to be used for computing neuronal signals. See
+%       cpm_grid_template for details
+%       -precomp_file: filename of the resulting population field U
+%
+%   OUTPUTS:
+%       -U: population response containing all possible responses.
 
 
 
@@ -58,13 +70,14 @@ else
         idx = num2cell(idxmatrix(i,:));
         precomputed(:,idx{:})= signal; 
     end
-
-    U(length(ons)) = struct();
+    
+    microtime = true;
+    U(length(signal)) = struct();
     S= {};
     S.subs = repmat({':'},1,ndims(precomputed));
     S.type = '()';
 
-    for nt = 1 : length(ons)
+    for nt = 1 : length(signal)
         S.subs{1}=nt;
         signals=squeeze(subsref(precomputed,S));
         
@@ -77,14 +90,40 @@ else
     
         U(nt).signals = signals;
         U(nt).signals1D = signals1D;
-        U(nt).ons = data.ons(nt);
-        U(nt).dur = data.dur(nt);
-        U(nt).dt = data.dt(nt); 
+        try
+            try 
+                U(nt).ons = data.ons(nt);
+                U(nt).dur = data.dur(nt);
+                U(nt).dt = data.dt(nt);
+
+            catch
+                U(nt).ons = data(nt).ons;
+                U(nt).dur = data(nt).dur;
+                U(nt).dt = data(nt).dt;
+            end
+        catch
+            try
+                U(nt).ons = data.ons(1);
+                U(nt).dur = data.dur(1);
+                U(nt).dt = data.dt(1); 
+                microtime  = false;
+            catch
+                U(nt).ons = data(1).ons;
+                U(nt).dur = data(1).dur;
+                U(nt).dt = data(1).dt; 
+                microtime  = false;
+            end
+        end
     end
     
     U(1).grid = grid;
     U(1).gridpoints = argmatrix;
     U(1).grididx= idxmatrix;
+    U(1).microtime = microtime;
+    if ~microtime
+        disp('microtime bins are not correctly set');
+    end
+    
     save(precomp_file,"U","grid","precomp_file");
     
     

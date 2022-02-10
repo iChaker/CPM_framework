@@ -1,6 +1,12 @@
 function [true_P, tm_names, ts_names] = cpm_get_true_parameters(varargin)
-% In: PRF and voxelnumber
-% out: true parameters for that voxel
+% cpm_get_true_parameters 
+%   This function transforms latent neuronal parameters returns the correct 
+%   population field parameters for interpretation.
+%
+%   In: PRF and voxelnumber, alternatively, a structure containing all VL parameters, 
+%       a PRF.M structure and a population response U 
+%   
+%   out: true population field parameters for that voxel
 
 if nargin==2
     PRF=varargin{1};

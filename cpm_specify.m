@@ -1,5 +1,31 @@
-function PRF = cpm_specify(SPM,options,y,XYZmm,U,receptive_field,observation_function,outpath,varargin)
-% must give in options: name, TE  + other optional args in spm_prf_analyse
+function PRF = cpm_specify(SPM,options,y,XYZmm,U,population_field,observation_function,outpath,varargin)
+% cpm_specify  specifies a PRF model over a precomputed parameter space
+% using a  population receptive field model
+%   INPUTS:
+%       -SPM: SPM structure
+%       -options: structure contaning 'name', 'TE'... See spm_prf_analyse
+%       for other options
+%       -y: fMRI timeseries
+%       -XYZmm: voxel locations
+%       -U: the population response over which we will estimate the
+%       population field
+%       -population_field: name of population field model 'cpm_RF_Gaussian'
+%       or 'cpm_RF_SoG'. Alternatively, you can implement your own 
+%       population field model by following 'cpm_RF_template'  
+%       -observation_function: name of observation function (usually
+%       hemodynamic function) 'spm_obv_int' is the default, it contains an
+%       extended Balloon model as implemented by the BayespRF framework.
+%       Alternatively, you can implement your own observation model by 
+%       following 'cpm_obv_template'  
+%       -outpath: folder in which the PRF will be saved
+%       -varargin: optional parameters to be passed into PRF.M.cpm.other
+%   
+%   OUTPUTS:
+%       -PRF: BayespRF PRF structure, the default PRF model is 'spm_prf_response'. The
+%       user may implement 'get_summary' function inside spm_prf_response
+%       in order to have full access to feautures provided by BayespRF.
+%
+
 
 %SPM
 SPM.swd = outpath;
@@ -12,10 +38,10 @@ VOI.xY=xY;
 
 % priors -------------------------------------------------
 
-if isempty(receptive_field)
-    receptive_field='cpm_RF_Gaussian';
+if isempty(population_field)
+    population_field='cpm_RF_Gaussian';
 end
-[~,~,~,fn_lmoment_priors,fn_lscaling_priors] =  feval(receptive_field);
+[~,~,~,fn_lmoment_priors,fn_lscaling_priors] =  feval(population_field);
 [mpE,mpC] = fn_lmoment_priors();
 [spE,spC] = fn_lscaling_priors();
 pE = struct();
@@ -56,10 +82,14 @@ end
 
 options.pE = pE;
 options.pC = pC;
-options.model = 'spm_prf_response';
+try options.model; 
+    
+catch
+   options.model  = 'spm_prf_response';
+end
 options.voxel_wise = true;
 cpm.obv_fun=observation_function;
-cpm.RF_fun=receptive_field;
+cpm.RF_fun=population_field;
 try cpm.other=varargin; catch end
 options.cpm=cpm;
 

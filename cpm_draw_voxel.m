@@ -1,12 +1,16 @@
-function z = cpm_draw_voxel(PRF,voxel,dim1,dim2,fixed_values)
-%CPM_DRAW_VOXEL Summary of this function goes here
-%   Detailed explanation goes here
+function z = cpm_draw_voxel(PRF,Pvoxel,dim1,dim2,fixed_values,bins,tile)
+%cpm_draw_voxel draws population field over a slice of the parameter space
+%   INPUT:
 %   Voxel:    voxel index
 %   dim1 - dim2 :     parameters names to show i.e 'tau' 'eta'
 %   fixed_values: array of fixed values for the rest of the parameters
 %   (defaults to array of zeros)
 %   Make sure dim1 and dim2 are ordered ('tau' 'eta' is correct 'eta' 'tau'
 %   gives a wrong graph)
+%   bins: defines granularity of the image
+%
+%   OUTPUT:
+%   z: weights of population field for the given slice and precision.
 
 grid = PRF.U(1).grid;
 
@@ -14,8 +18,7 @@ d1 = grid.(dim1);
 d2 = grid.(dim2);
 
 
-b=80;
-
+b=bins;
 
 % Make correct coords
 
@@ -27,6 +30,14 @@ try
 catch
     fixed_values= zeros(1,length(p_names)-2);
 end
+
+try 
+    P=PRF.Ep{Pvoxel};
+catch
+    P= Pvoxel;
+end
+
+
 
 x_bins = linspace(d1(1),d1(2),b);
 y_bins = linspace(d2(1),d2(2),b);
@@ -52,21 +63,33 @@ for i=1:length(p_names)
 
 end
 
-figure;
-
-z  = feval(PRF.M.IS, PRF.Ep{voxel}, PRF.M, PRF.U, 'get_response', coords);
+try tile
+   nexttile(tile); 
+   c=9;
+catch
+   figure;
+   c=17;
+end
+z  = feval(PRF.M.IS, 	P , PRF.M, PRF.U, 'get_response', coords);
 z  = reshape(z,b,b);
 
-ticks = linspace(1,b,17);
+ticks = linspace(1,b,c);
 
-colormap(jet);
+%colormap(jet);
 imagesc(z);
 %[ 'voxel:' num2str(voxel) 'at' num2str(fixed_values)]
-title([ 'Voxel: ' num2str(voxel) ' slice for: ' num2str(fixed_values) ] ,'FontSize',16);
+if c==17
+    try 
+        title([ 'Voxel: ' num2str(Pvoxel) ' slice for: ' num2str(fixed_values) ] ,'FontSize',16); 
+    catch
+        title([ 'Gnerative Voxel, slice for: ' num2str(fixed_values) ] ,'FontSize',16);     
+    end
+    xlabel(dim1);
+    ylabel(dim2);
+end
 set(gca,'YDir','normal','XTick',ticks,'YTick',ticks);
 set(gca,'XTickLabel',linspace(d1(1),d1(2),length(ticks)),'YTickLabel',linspace(d2(1),d2(2),length(ticks))); 
-xlabel(dim1);
-ylabel(dim2);
+
 
 
 end
