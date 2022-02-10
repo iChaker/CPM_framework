@@ -1,5 +1,7 @@
 function [ fn_RF_weights, fn_true_moments,fn_true_scaling, fn_latent_moment_priors,fn_scaling_priors,fn_latent_moments,fn_latent_scaling  ] = cpm_RF_template(varargin)
-%CPM_RECEPTIVE_FIELD Summary of this function goes here
+%cpm_RF_template This function contains the population field model and its
+%associated latent transformation for estimation using VL. Each sub
+%function contains seperate documentation. cpm_RF_Gaussian as an example.
 %   Detailed explanation goes here
 fn_RF_weights=@get_RF_weights;
 fn_true_moments=@get_true_moments;
@@ -12,12 +14,14 @@ end
 
 %% Receptive field definition
 function W = get_RF_weights(coords,true_parameters)
-% return weight vector W (1 x npoints) for the coords
+% return weight vector W (1 x npoints) for the give coords
 %
-% coords (nparams x npoints) is the list of coordinates in the parameter grid
+% coords (nparams x npoints) is the list of coordinates in the parameter
+% space
 %
 % true_parameters's fieldnames are defined in get_true_moments and
-% get_true_scalo,g
+% get_true_scaling. This structure contains all the moments of the
+% population field prior to their latent transformations. 
 
 mu = true_parameters.mu ; % contains vector [ mu_param1 ... mu_paramN ]
 beta = true_parameters.beta ; % contains scalar
@@ -28,7 +32,7 @@ end
 %% Priors
 function [pE,pC] = get_latent_moment_priors()
 % define priors for the receptive field moments
-% chosen fieldnames will indicate how latent parameters are suffixed
+% chosen fieldnames will indicate how latent parameters are named.
     pE.lmu = 0;
     pC.lmu = 1;
 
@@ -38,7 +42,7 @@ function [pE,pC] = get_latent_scaling_priors()
 % define priors for the scaling priors (such as beta)
 % chosen fieldnames will be the names of latent scaling factors 
 % you may also use this to define other scalar parameters for the neuronal
-% model z
+% model z, if needed.
     pE.lbeta=0;
     pC.lbeta=5;
 end
@@ -49,7 +53,8 @@ function true_moments = get_true_moments(latent_moments, minp,maxp)
 %
 % latent_moments's fieldnames are defined in get_latent_moment_priors
 % To avoid confusion it's recommended to use different fieldnames for true
-% and latent moments
+% and latent moments. In the PRF structure, all parameters are stored as
+% latent parameters.
 %
 %
 % minp and maxp are the bounds set by the initial grid specification 
