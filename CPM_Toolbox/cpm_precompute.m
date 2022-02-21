@@ -120,6 +120,7 @@ else
     U(1).gridpoints = argmatrix;
     U(1).grididx= idxmatrix;
     U(1).microtime = microtime;
+    U(1).model = model;
     if ~microtime
         disp('microtime bins are not correctly set');
     end

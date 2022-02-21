@@ -48,7 +48,7 @@ lmu = latent_moments.lmu;
 lsigma = latent_moments.lsigma;
 
 SIGMA_MIN = 0;
-SIGMA_MAX = 20;
+SIGMA_MAX = 1;
 
 mu = ((maxp-minp) .* spm_Ncdf(lmu,0,1)) + minp ;
 sigma= ((SIGMA_MAX-SIGMA_MIN) .* spm_Ncdf(lsigma,0,1)) + SIGMA_MIN ;

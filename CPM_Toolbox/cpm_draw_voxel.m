@@ -26,7 +26,9 @@ p_names = fieldnames(grid);
 j=1;
 
 try 
-    fixed_values;
+    if isempty(fixed_values)
+        fixed_values= zeros(1,length(p_names)-2);
+    end
 catch
     fixed_values= zeros(1,length(p_names)-2);
 end
@@ -63,7 +65,7 @@ for i=1:length(p_names)
 
 end
 
-try tile
+try tile;
    nexttile(tile); 
    c=9;
 catch
@@ -75,7 +77,8 @@ z  = reshape(z,b,b);
 
 ticks = linspace(1,b,c);
 
-%colormap(jet);
+contourf(peaks)
+colormap(jet);
 imagesc(z);
 %[ 'voxel:' num2str(voxel) 'at' num2str(fixed_values)]
 if c==17
