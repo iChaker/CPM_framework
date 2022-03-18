@@ -54,6 +54,10 @@ Vs = zeros(trial_n, timestep_n);
 W = zeros(timestep_n .* stimuli_n, 1);
 RPEs = zeros(trial_n, timestep_n);
 
+u_min = cpm_isoelastic_utility(min(C(:)), eta);
+u_max = cpm_isoelastic_utility(max(C(:)), eta);
+u_range = u_max - u_min;
+
 for l = 1 : trial_n
    
     Z = zeros(timestep_n, timestep_n .* stimuli_n);
@@ -61,7 +65,7 @@ for l = 1 : trial_n
     for t = 1 : timestep_n - 1
        
         Z(t + 1, :) = Lambda .* gamma .* Z(t, :) + squeeze(Xs(l, t + 1, :))';
-        c_delta = cpm_isoelastic_utility(C(l, t + 1), eta) - cpm_isoelastic_utility(C(l, t), eta);
+        c_delta = (cpm_isoelastic_utility(C(l, t + 1), eta) - u_min) / u_range - (cpm_isoelastic_utility(C(l, t), eta) - u_min) / u_range;
         w_delta = gamma .* squeeze(Xs(l, t + 1, :))' * W - squeeze(Xs(l, t, :))' * W;
         
         RPEs(l, t + 1) = c_delta + w_delta;

@@ -25,14 +25,6 @@ function output = cpm_grid_RPE(freeparams,fixedparams,data)
     RPEs(1:3:end) = RPE(:, 2);
     RPEs(2:3:end) = RPE(:, 3);
     RPEs(3:3:end) = RPE(:, 4);
-
-    % If necessary rescale RPE to -1 and 1 - This can easily be
-    % optimizied to be run after the for-loop. Keeping it for
-    % readability.
-    abs_max = max(abs(RPEs(:)));
-    RPEs(:) = RPEs(:) ./ abs_max;  
-
-    
     
     output=RPEs;
     
