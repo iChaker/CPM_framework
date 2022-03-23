@@ -2,7 +2,8 @@ function output = cpm_grid_RPE(freeparams,fixedparams,data)
 % Reward prediction error model
 
     % load args
-
+    
+    
     try eps = freeparams.eps; catch eps=0; end
     try eta = freeparams.eta; catch eta=0; end
     
