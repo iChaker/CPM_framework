@@ -9,7 +9,7 @@ function [offset,PRF] = cpm_calculate_offset(PRF,voxels)
 %           -PRF: structure with estimated voxels + per voxel offsets in
 %           PRF.xY.offsets
 PRF.M.cpm.obv_fun = 'cpm_obv_delay';
-PRF.M.cpm.obv_fun = 'cpm_RF_SoG';
+PRF.M.cpm.RF_fun = 'cpm_RF_SoG';
 Y=PRF.xY.y;
 nvoxels = size(PRF.xY.y,2);
 try voxels; catch voxels=''; end
