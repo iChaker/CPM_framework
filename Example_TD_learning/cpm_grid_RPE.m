@@ -2,9 +2,6 @@ function output = cpm_grid_RPE(freeparams,fixedparams,data)
 % Reward prediction error model
 
     % load args
-
-    tau = freeparams.tau;
-    try eps = freeparams.eps; catch eps=0; end
     try eta = freeparams.eta; catch eta=0; end
     
     gamma = fixedparams.gamma;
@@ -14,8 +11,10 @@ function output = cpm_grid_RPE(freeparams,fixedparams,data)
     S = data.S;
     
     % define model
-    %alpha = freeparams.alpha;
-    alpha = [ logit_inv(tau - eps), logit_inv(tau + eps)];
+    alpha = freeparams.alpha;
+    
+    try alpha = [alpha, freeparams.alpha_p]; catch alpha = alpha; end
+    % alpha = [ logit_inv(tau - eps), logit_inv(tau + eps)];
 
     
     
