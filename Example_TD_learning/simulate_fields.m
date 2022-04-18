@@ -38,7 +38,6 @@ RF_fun = ''; % population field model, defaults to Gaussian
 %% choose voxels to simulate
 % we choose values to be combinations of 0,1/3,2/3,1 and -1,0,1
 % These are latent values, because we will save them directly into the PRF structure
-% 0.5 0 and -0.5 transforms into the values below
 
 lalphas = [-5,-0.4308,0.4306,5];
 letas = [-0.9674,0.9674];
