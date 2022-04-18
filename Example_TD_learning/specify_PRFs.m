@@ -1,56 +1,50 @@
 clear()
-%% Load data
-file="tsvfile1.tsv";
-dt = 0.074;
-[trial_n, timestep_n, stimuli_n, S, stimuli, C, onsets] = cpm_prepare_experiment_data(file);
-durations = ones(3 * trial_n, 1) .* 2 .* dt;
-dts = ones(3 * trial_n, 1) .* dt;
 
-data.ons = onsets;
-data.dur = durations;
-data.dt = dts;
-data.C = C;
-data.S = S;
-
-% any input data structure must contain the fields: ons dur dt
-% Other than that, you may add fields in which ever way you want (in this
-% case C and S)
+% this is how to specify a cpm model using experimental data and BOLD
+% signals
+% we will use voxels simulated in simulate_fields script
+% the first two section are exactly similar to simulate_fields script
 
 
+%% specify a cpm models using simulated data
 
-%% Select grid model & precompute
-model = "cpm_grid_RPE"; % user defined model, see cpm_grid_template for details
+% cpm uses the same PRF structure as BayespRF
+% It contains
+%   U: input data, the precomputed grid, name of computational model
+%   M: observation model, population field model and scanning parameters
+%   xY, Y: the measured fMRI timeseries (in out case simulated, see simulate_fields script) 
 
-
-
-grid.tau = [-36.0437 36.0437 80]; % grid.Theta_i = [min max Nsteps]
-%grid.eps = [-4 4 20]; % these fieldnames must be the same fieldnames used in the cpm_grid
-grid.eta = [-1.5 1.5 15]; % you can use different stepsizes for each parameter
-
-fixedparams.gamma=1;  % these fieldnames must be the same fieldnames used in the cpm_grid
-fixedparams.Lambda=0.99;
-% make sure to change output file name if you change grid structure
-output_file = './U/U_restr.mat'; % cpm_precompute does not overwrite an existing file
-
-U = cpm_precompute(model,grid,fixedparams,data,output_file);
-%% specify a PRF 
-
-load('SPM.mat');
+%iterate over simulation files (noise levels)
 fnames = ls('sim');
+name_tag = 'RPE_20'; % files name tag 
+
+
 for i=1:size(fnames,1)
-    if startsWith(fnames(i,:),'sim_BMR')
-        load( [ 'sim/' fnames(i,:)]);
-        load('PRF_INIT_RPE');
-        y=xY.y;               % timeseries
-        XYZmm=xY.XYZmm;       % locations
-        noise = xY.noise;     % noise
-        options.name=[ 'RPE_alpha_' num2str(noise) ]; % PRF file tag
+    if startsWith(fnames(i,:),['sim_' name_tag]) 
+        load( [ 'sim/' fnames(i,:)]); % load simuation file
+        
+        % 1.SPM structure (can be outside the loop)
+        load('SPM.mat');
+        
+        % 2.BayespRF / scanning parameters
+        options.name=[ name_tag '_' num2str(sim.noise) ]; % PRF file name
         options.TE=0.03;      % Echo time (you may add other options from BayespRF)
         outpath='./GLMs';  % PRF file path
+        
+        % 3.measured fMRI data (BOLD signals), here they are simulated by
+        % simulate_fields script
+        y=xY.y;               % timeseries
+        XYZmm=xY.XYZmm;       % locations
+        
+        % 4.precomputed parameter space U (can be outside the loop)
+        load(['U/U_' name_tag  '.mat'])
+        
+        % 5,6.cpm model functions (can be outside the loop)
+        obfun= 'cpm_obv_int'; % observation model (Balloon model), if empty, defaults to a simple downsampling
+        RFfun = ''; % population field model, defaults to Gaussian
 
-        obfun= 'cpm_obv_int'; % user defined observation model, if empty, defaults to a simple downsampling
-        RFfun = []; % user defined probability function, defaults to Gaussian
-
+        % specify a PRF for current noise level 
+        % cpm_specify(1,2,3,4,5,6)
         PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath);
     end
 end

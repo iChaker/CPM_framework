@@ -4,17 +4,26 @@
 
 
 fnames = ls('GLMs');
+name_tag = 'RPE_20';
 
+voxels = []; % choose voxels to estimate
+
+% iterate over noise levels
 for i=1:size(fnames,1);
     
-   if startsWith(fnames(i,:),'PRF_RPE_alpha_0.m')
+   if startsWith(fnames(i,:),'PRF_RPE_20_')
+       
+       % load PRF structure for current noise level
        load( [ './GLMs/' fnames(i,:) ] );
-       try PRF.Ep
+       
+       try PRF.Ep % check if already estimated
           
            disp( [ 'aleady estimated ' fnames(i,:)] ); 
        catch
-           voxels = [];
+           %estimate
            PRF = cpm_estimate(PRF,voxels);
+           
+           %save
            save([ './GLMs/' fnames(i,:) ],'PRF');
            disp(fnames(i,:));
        end

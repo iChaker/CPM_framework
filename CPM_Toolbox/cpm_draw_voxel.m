@@ -90,6 +90,8 @@ if c==17
     xlabel(dim1);
     ylabel(dim2);
 end
+
+
 set(gca,'YDir','normal','XTick',ticks,'YTick',ticks);
 set(gca,'XTickLabel',linspace(d1(1),d1(2),length(ticks)),'YTickLabel',linspace(d2(1),d2(2),length(ticks))); 
 

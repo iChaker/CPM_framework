@@ -25,7 +25,7 @@ W = xx*beta .* x;
 end
 %% Priors
 function [pE,pC] = get_latent_moment_priors()
-% latent priors for receptive field moments 
+% latent prior distributions for receptive field moments 
     pE.lmu = 0;
     pC.lmu = 1;
     
@@ -47,8 +47,9 @@ function true_moments = get_true_moments(latent_moments, minp,maxp)
 lmu = latent_moments.lmu;
 lsigma = latent_moments.lsigma;
 
+% THESE SHOULD BE HYPERPARAMETERS
 SIGMA_MIN = 0;
-SIGMA_MAX = 1;
+SIGMA_MAX = 2;
 
 mu = ((maxp-minp) .* spm_Ncdf(lmu,0,1)) + minp ;
 sigma= ((SIGMA_MAX-SIGMA_MIN) .* spm_Ncdf(lsigma,0,1)) + SIGMA_MIN ;

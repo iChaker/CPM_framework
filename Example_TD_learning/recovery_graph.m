@@ -3,7 +3,7 @@
 b = 100;
 
 grid = PRF.U(1).grid;
-d1 = [0 1 grid.tau(3)];
+d1 = [0 1 grid.alpha(3)];
 d2 = grid.eta;
 x_offset = 0;
 y_offset = -d2(1);

@@ -1,99 +1,92 @@
 % make sure to run script when inside Example_TD_learning folder
+% make sure to include SPM and CPM folders and subfolders to MATLAB path
 clear()
-%% Load data
-file="tsvfile1.tsv";
-dt = 0.074;
-[trial_n, timestep_n, stimuli_n, S, stimuli, C, onsets] = cpm_prepare_experiment_data(file);
-durations = ones(3 * trial_n, 1) .* 2 .* dt;
-dts = ones(3 * trial_n, 1) .* dt;
 
-data.ons = onsets;
-data.dur = durations;
-data.dt = dts;
-data.C = C;
-data.S = S;
+%% load dummy PRF
 
-% any input data structure must contain the fields: ons dur dt
-% Other than that, you may add fields in which ever way you want (in this
-% case C and S)
+% this PRF structure is prededfined outside the given scripts
+% This is a necessary step because:
+% 1. we simulate BOLD signals using the PRF structure
+% 2. the PRF structure specification requires a BOLD signal
+
+% To solve this chicken or egg problem, we provide this PRF structure which was
+% specified using an arbitrary BOLD signal having the same dimentions as the measured fMRI
+load('GLMs\PRF_dummy_GLM.mat'); 
 
 
+%% choose population response:
 
-%% Select grid model & precompute
-model = "cpm_grid_RPE"; % user defined model, see cpm_grid_template for details
+% prefix to add to all relevant files
+name_tag = 'RPE_20'; % we seperate filenames using population response grid,  noise levels will be added automatically to filenames
+
+% load population response
+load(['U/U_' name_tag  '.mat'])
+
+% fill in some missing values
+for i=1:length(U)
+    U(i).nbins=PRF.U(i).nbins;
+    U(i).ind=PRF.U(i).ind;
+end
+PRF.U=U;
+clear U;
 
 
+%% choose observation model and population field model:
+obv_fun= 'cpm_obv_int'; % observation model (Balloon model), if empty, defaults to a simple downsampling
+RF_fun = ''; % population field model, defaults to Gaussian
 
-grid.tau = [-36.0437 36.0437 4]; % grid.Theta_i = [min max Nsteps]
-%grid.eps = [-4 4 20]; % these fieldnames must be the same fieldnames used in the cpm_grid
-grid.eta = [-1.5 1.5 4]; % you can use different stepsizes for each parameter
+%% choose voxels to simulate
+% we choose values to be combinations of 0,1/3,2/3,1 and -1,0,1
+% These are latent values, because we will save them directly into the PRF structure
+% 0.5 0 and -0.5 transforms into the values below
 
-fixedparams.gamma=1;  % these fieldnames must be the same fieldnames used in the cpm_grid
-fixedparams.Lambda=0.99;
-% make sure to change output file name if you change grid structure
-output_file = './U/U_restr.mat'; % cpm_precompute does not overwrite an existing file
+lalphas = [-5,-0.4308,0.4306,5];
+letas = [-0.9674,0.9674];
 
-U = cpm_precompute(model,grid,fixedparams,data,output_file);
-%% specify a PRF 
+% population field model values
+lsigma = -5; % for all points
+lbeta = 0;   % for all points
 
-load('SPM.mat');
-load('./sim_VOI_point.mat');
-y=xY.y;               % timeseries
-XYZmm=xY.XYZmm;       % locations
-options.name='pRPE'; % PRF file tag
-options.TE=0.03;      % Echo time (you may add other options from BayespRF)
-options.model = 'spm_prf_response';
-
-outpath='GLMs';  % PRF file path
-
-obfun= 'cpm_obv_int'; % used defined observation model, if empty, defaults to a simple downsampling
-RFfun = ''; % user defined receptive field model, defaults to Gaussian
-
-PRF=cpm_specify(SPM,options,y,XYZmm,U,RFfun,obfun,outpath);
-
-%% specify locations
-
-% values are combinations of 0.5 0 and -0.5
-% These are latent values
-taus = [0,-1,-0.024115,0.024115,1];
-
-etas = [-0.9674,0,0.9674];
-%% specify other values
-lsigma = -5;
-lbeta = 0;  
-
+% observation (hemodynamic) model values
+% cpm doesn't require these parameter to be latent, it depends on the
+% implementation
+% In our case, these are latent parameters that will be exponentiated within the Balloon model
+% implementation
 transit=0.3;
 decay=0.2;
 epsilon=-0.5;
-            
-%%
-nvoxels = length(taus) * length(etas);
 
-% we set the location of our voxels
+
+%% run simulation
+nvoxels = length(lalphas) * length(letas);
+nscans = size(PRF.xY.y,1);
+
+% initialize location matrix
 location = zeros(3,nvoxels);
 location(1,:) = 1:nvoxels;
 
-% array to store parameter set for each voxel
-P_voxels = combvec(taus,etas)';
+% all possible computational parameter combinations
+P_voxels = combvec(lalphas,letas)';
 
-nscans = size(PRF.xY.y,1);
-
+% noise values
 noise_variance = [0 0.3 0.25 0.2 0.15 0.1 0.05];
 
-% computing the timeseries for each voxels,for each noise level.
+% simulating voxels for each noise value
 for i =1:size(noise_variance,2)
     
     disp(['generating timeseries with noise level '  num2str(noise_variance(i))]);
+    
     % timeseries
     y = zeros(nscans,nvoxels);
     Params = {};
 
-     for s =1:nvoxels
+     for v =1:nvoxels
             
-            P.lmu_tau = P_voxels(s,1); 
-            P.lmu_eta = P_voxels(s,2);
+            % P: all PRF parameters for voxel v
+            P.lmu_alpha = P_voxels(v,1); 
+            P.lmu_eta = P_voxels(v,2);
 
-            P.lsigma_tau = lsigma;
+            P.lsigma_alpha = lsigma;
             P.lsigma_eta = lsigma;
             
             P.lbeta=lbeta;
@@ -106,26 +99,37 @@ for i =1:size(noise_variance,2)
 
             % adding gaussian noise to the BOLD signal
 
-            y(:,s) = BOLD_signal + normrnd(0,noise_variance(i),[nscans,1]);
-            Params{s} = P;
+            y(:,v) = BOLD_signal + normrnd(0,noise_variance(i),[nscans,1]);
+            Params{v} = P;
+            
+            % sanity check: display true parameters for current voxel v
             cpm_get_true_parameters(P,PRF.M,PRF.U)
-            %cpm_draw_voxel(PRF,P,'tau','eta','',100); 
+            
+            % sanity check: draw population field in real parameter space
+            % points are too tiny to notice, raise lsigma value for more clarity
+            % cpm_draw_voxel(PRF,P,'alpha','eta','',100); 
+            
             clear P;
      end    
 
-    % timeserie of each voxels
-    xY.y = y;
-    xY.PRF=PRF;
-    % location of the voxels
-    xY.XYZmm =  location;
-    xY.Params= Params;
-    % parameter of the voxels nrf
-    xY.params = P_voxels;
-    % mean value of the voxels timeseries
-    Y = mean(y,2);
+    % saving xY structure:
     
-    xY.noise = noise_variance(i);
-    save(['sim/sim_BMR_alpha_' num2str(noise_variance(i)) '.mat'],'xY','Y');
+    % fMRI timeseries
+    Y = mean(y,2);
+    xY.y = y; 
+    
+    % simulation parameter values
+    xY.XYZmm =  location;
+    sim.Params= Params; % all PRF parameters (latent) 
+    sim.params = P_voxels; % NRF parameters
+  
+    sim.PRF=PRF; % another sanity check, this isn't required
+    
+    % current noise value
+    sim.noise = noise_variance(i);
+    
+    % saving to file with name tag and noise tag
+    save(['./sim/sim_' name_tag '_' num2str(noise_variance(i)) '.mat'],'xY','Y','sim');
             
 end
 
