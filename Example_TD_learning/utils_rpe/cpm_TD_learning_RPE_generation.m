@@ -1,4 +1,4 @@
-function RPEs = cpm_TD_learning_RPE_generation(alpha, eta, gamma, Lambda, S, C)
+function [RPEs, Xs, Ws] = cpm_TD_learning_RPE_generation(alpha, eta, gamma, Lambda, S, C)
 
 % TODO documentation, testing
 
@@ -54,6 +54,8 @@ Vs = zeros(trial_n, timestep_n);
 W = zeros(timestep_n .* stimuli_n, 1);
 RPEs = zeros(trial_n, timestep_n);
 
+Ws = zeros(timestep_n .* stimuli_n, timestep_n, trial_n);
+
 for l = 1 : trial_n
    
     Z = zeros(timestep_n, timestep_n .* stimuli_n);
@@ -72,13 +74,14 @@ for l = 1 : trial_n
             W = W + (alpha_neg .* RPEs(l, t + 1) .* Z(t, :))';
         end
         
+        Ws(:, t, l) = W;
     end
     
     Vs(l, :) = squeeze(Xs(l, :, :)) * W;
     
-    if l < trial_n - 1
-        RPEs(l + 1) = RPEs(l);
-    end
+%     if l < trial_n - 1
+%         RPEs(l + 1) = RPEs(l);
+%     end
     
 end
 end

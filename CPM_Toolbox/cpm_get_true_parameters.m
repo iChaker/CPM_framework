@@ -36,11 +36,17 @@ s_names = fieldnames(pE);
 
 true_P= struct();
 
+cc = 1;
+L_names = {};
+
+% Add latent parameters
 for i=1:length(p_names)
    latent_moments = struct();
    for j=1:length(m_names)
        VL_latent = [ m_names{j} '_' p_names{i} ];
        latent_moments.(m_names{j})=P.(VL_latent);
+       L_names{cc} = VL_latent;
+       cc = cc + 1;
    end
    minp = U(1).grid.(p_names{i})(1);
    maxp = U(1).grid.(p_names{i})(2);
@@ -52,6 +58,8 @@ for i=1:length(p_names)
    end
    
 end
+
+% Add scaling parameters
 latent_scaling = struct();
 for i=1:length(s_names)    
     latent_scaling.(s_names{i}) = P.(s_names{i});
@@ -61,6 +69,27 @@ ts_names = fieldnames(true_scaling);
 for i=1:length(ts_names)
    true_P.(ts_names{i}) =  true_scaling.(ts_names{i});
 end
+
+% Add non transformed parameters
+all_names = fieldnames(P);
+
+for i = 1 : length(all_names)
+    if ~any(strcmpi(all_names{i}, [L_names, s_names]))
+       true_P.(all_names{i}) = P.(all_names{i}); 
+    end
+end
+
+% Sort true parameters to have same order as native
+out_names = fieldnames(true_P);
+
+sort_vec = zeros(length(out_names), 1);
+
+% Works because, latent parameters (in all_names) have only a 'l' added
+for i = 1 : length(out_names)
+    sort_vec = sort_vec + (contains(all_names, out_names{i}) .* i);
+end
+
+true_P = orderfields(true_P, out_names(sort_vec));
 
 end
 
