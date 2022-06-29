@@ -27,10 +27,10 @@ end
 function [pE,pC] = get_latent_moment_priors()
 % latent prior distributions for receptive field moments 
     pE.lmu = 0;
-    pC.lmu = 1;
+    pC.lmu = 1.0;
     
-    pE.lsigma=-2.5;
-    pC.lsigma=1;
+    pE.lsigma = -2.5;
+    pC.lsigma = 1.0;
     
 end
 
@@ -41,7 +41,7 @@ function [pE,pC] = get_latent_scaling_priors()
 end
 
 %% true transforms
-function true_moments = get_true_moments(latent_moments, minp,maxp)
+function true_moments = get_true_moments(latent_moments, minp, maxp)
 % 
 
 lmu = latent_moments.lmu;

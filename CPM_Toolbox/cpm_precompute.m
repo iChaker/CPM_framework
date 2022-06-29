@@ -1,4 +1,4 @@
-function U = cpm_precompute(model,grid,fixedparams,data,precomp_file)
+function U = cpm_precompute(model,grid,fixedparams,data,precomp_file, overwrite)
 % cpm_precompute Summary of this function goes here
 %   INPUTS:
 %       -model: name computational model of interest. The user would 
@@ -16,7 +16,7 @@ function U = cpm_precompute(model,grid,fixedparams,data,precomp_file)
 
 
 
-if exist(precomp_file, 'file') == 2
+if (exist(precomp_file, 'file') == 2) && ~overwrite
     disp(['precomputation available: ' precomp_file])
     load(precomp_file);  
 
@@ -82,7 +82,7 @@ else
         signals=squeeze(subsref(precomputed,S));
         
         signals1D = zeros(length(idxmatrix),1);
-        for i=1:length(idxmatrix)
+        for i=1 : size(idxmatrix, 1)
             idx = num2cell(idxmatrix(i,:));
             signals1D(i)=signals(idx{:});
         end

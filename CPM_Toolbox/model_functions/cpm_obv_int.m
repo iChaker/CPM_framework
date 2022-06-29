@@ -36,8 +36,8 @@ end
 function [pE,pC] = observation_priors()
 
 
-pE.transit= 1 ;
-pE.decay= 1 ;
+pE.transit= 0 ;
+pE.decay= 0 ;
 pE.epsilon= 0.4584;
 
 pC.transit= 1/128;
