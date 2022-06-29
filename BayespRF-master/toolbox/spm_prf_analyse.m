@@ -353,8 +353,14 @@ if ~floor(bins_per_TR)==bins_per_TR
     
     warning('Bins per TR is not an integer value, please check dt and TR input values');
     bins_per_TR = round(bins_per_TR);
+
+elseif class(bins_per_TR) == 'double'
+
+    warning('Bins per TR is not an integer value, please check dt and TR input values');
+    bins_per_TR = round(bins_per_TR);
     
 end
+
 for t = 1:length(U)
     start_bin = ceil( U(t).ons / U(t).dt) + 1;
     end_bin   = start_bin + (U(t).dur * bins_per_second) - 1;
