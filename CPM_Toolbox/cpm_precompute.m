@@ -10,7 +10,6 @@ function U = cpm_precompute(model,grid,fixedparams,data,precomp_file, overwrite)
 %       -data: stimulus data to be used for computing neuronal signals. See
 %       cpm_grid_template for details
 %       -precomp_file: filename of the resulting population field U
-%       -overwrite: whether to overwrite existing files
 %
 %   OUTPUTS:
 %       -U: population response containing all possible responses.
@@ -38,8 +37,14 @@ else
                            
     end
 
-    argmatrix = combvec(linspaces{:})';
-    idxmatrix = combvec(idxcell{:})';
+
+    ons = data.ons;
+    argmatrix = combvec(linspaces{:});
+    argmatrix = argmatrix';
+
+    idxmatrix = combvec(idxcell{:});
+    idxmatrix = idxmatrix';
+
 
     p_values = num2cell(argmatrix(1,:),1);
     freeparams = cell2struct(p_values,p_names,2);
