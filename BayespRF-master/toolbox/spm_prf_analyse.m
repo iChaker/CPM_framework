@@ -354,7 +354,7 @@ if ~floor(bins_per_TR)==bins_per_TR
     warning('Bins per TR is not an integer value, please check dt and TR input values');
     bins_per_TR = round(bins_per_TR);
 
-elseif class(bins_per_TR) == 'double'
+elseif mod(bins_per_TR, 1) ~= 0
 
     warning('Bins per TR is not an integer value, please check dt and TR input values');
     bins_per_TR = round(bins_per_TR);
