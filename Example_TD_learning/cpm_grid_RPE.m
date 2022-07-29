@@ -15,8 +15,8 @@ function output = cpm_grid_RPE(freeparams,fixedparams,data)
     
     % define model
     alpha = freeparams.alpha;
-%     tau = freeparams.tau;
-%     alpha = [ logit_inv(tau - eps), logit_inv(tau + eps)];
+    %tau = freeparams.tau;
+    %alpha = [ logit_inv(tau - eps), logit_inv(tau + eps)];
 
     
     
