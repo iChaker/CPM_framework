@@ -1,4 +1,4 @@
-function z = cpm_draw_voxel(PRF,Pvoxel,dim1,dim2,fixed_values,bins,tile)
+function z = cpm_draw_voxel(PRF, Pvoxel, dim1, dim2, fixed_values, bins, plot)
 %cpm_draw_voxel draws population field over a slice of the parameter space
 %   INPUT:
 %   Voxel:    voxel index
@@ -39,8 +39,6 @@ catch
     P= Pvoxel;
 end
 
-
-
 x_bins = linspace(d1(1),d1(2),b);
 y_bins = linspace(d2(1),d2(2),b);
 
@@ -72,16 +70,18 @@ end
 %    figure;
 c=0;
 % end
+
 z  = feval(PRF.M.IS, 	P , PRF.M, PRF.U, 'get_response', coords);
 z  = reshape(z,b,b);
 
+if plot
+
 ticks = linspace(1,b,c);
 
-contourf(peaks)
+% contourf(peaks)
 % colormap(jet);
 imagesc(z);
 %[ 'voxel:' num2str(voxel) 'at' num2str(fixed_values)]
-if c==17
     try 
         title([ 'Voxel: ' num2str(Pvoxel) ' slice for: ' num2str(fixed_values) ] ,'FontSize',16); 
     catch
@@ -89,13 +89,13 @@ if c==17
     end
     xlabel(dim1);
     ylabel(dim2);
-end
+
 
 
 set(gca,'YDir','normal','XTick',ticks,'YTick',ticks);
 set(gca,'XTickLabel',linspace(d1(1),d1(2),length(ticks)),'YTickLabel',linspace(d2(1),d2(2),length(ticks))); 
 
-
+end
 
 end
 

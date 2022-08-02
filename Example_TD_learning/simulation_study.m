@@ -24,7 +24,7 @@ mkdir("tmpfiles"); % Create a directory for temporary files which will be ignore
 mkdir("simulationfiles");
 
 %% ======== SIMULATION SETUP =======================
-REDO = true; % Overwrites everything instead of loading temporary files.
+REDO = false; % Overwrites everything instead of loading temporary files.
 
 % We can freely chose for which TR we want to simulate data, we use the TR from
 % a previous project of ours. 
@@ -210,12 +210,11 @@ else
 end
 
 %% ===================== VISUALIZATION OF RECOVERED PARAMS
+nlevel = 0.3;
+visualize_recovery(PRFn, 1 + (nparams * (find(voi_noise == nlevel) - 1))  : nparams + (nparams * (find(voi_noise == nlevel) - 1)), voi_params)
+sgtitle(sprintf('Parameter recovery with noise %4.2f', nlevel))
 
-visualize_recovery(PRFn, 1 : nparams + (nparams * (find(voi_noise == 0.0) - 1)), voi_params)
-
-visualize_recovery(PRFn, 1 : nparams+ (nparams * (find(voi_noise == 0.3) - 1)), voi_params)
-
-
+%%
 %% Perform model reduction
 
 % Models in comparison
