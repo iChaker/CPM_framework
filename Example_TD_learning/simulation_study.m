@@ -1,46 +1,79 @@
+% Clear console etc.
 clear;
 clc;
 close all;
-%% SETUP
-REDO = true; % Overwrites everything instead of loading temporary files.
-DATA_GENERATION = 'grid'; % Type of data generation process.
 
+%%  ===========================================
+% =================== SETUP ==================== =
+% =============================================
+% Random seed for reproducibility of noise etc.
+rng(2022)
+% Adding paths
 addpath('utils_rpe')
 addpath('utils_simulation')
 addpath(genpath('../CPM_Toolbox'))
 addpath(genpath('../BayespRF-master'))
-%% Simulation study to generate the data necessary for the computational
-% parametric mapping paper. 
-mkdir("tmpfiles"); % Create a directory for temporary files which will be ignored.
-mkdir("simulationfiles");
-% add spmpath:
+% Adding toolboxes, check that you have the right path here!
 addpath('/mnt/projects/LogUtil/Neuroimaging_RewardCoding/scripts/cpm/toolboxes/spm12/')
 BASEDIR = pwd;
 cd('/mnt/projects/LogUtil/Neuroimaging_RewardCoding/scripts/cpm/toolboxes/VBA-toolbox/')
 VBA_setup
 cd(BASEDIR);
-% First step - simulate data
-% We want data for the full model with values. For this we create an artificial
-% VOI, for this grid over the following values for tau and eta:
-voi_tau = [0, 1/3, 2/3, 1]; %-36.0437,  -0.6931, 0.6931, 36.0437];
+% Creating directories to store simulation files 
+mkdir("tmpfiles"); % Create a directory for temporary files which will be ignored.
+mkdir("simulationfiles");
+
+%% ======== SIMULATION SETUP =======================
+REDO = true; % Overwrites everything instead of loading temporary files.
+
+% We can freely chose for which TR we want to simulate data, we use the TR from
+% a previous project of ours. 
+TR = 0.592;
+% The file containing the experimental inputs.
+file="tsvfile1.tsv";
+% dt is the micro resolution, which is often 8 or 20, but for example when slice-time
+% correction has been produced should be set to the number of slices.
+dt = TR / 8; % Assuming classical SPM approach 
+% As this is a simulation, nscans are inferred from the data, but you can change
+% it here manually:
+nscans = nan;
+% I see two possibilities in generating the data for our recovery study
+% 1. Using a grid and moving the parameters to certain areas within the grid,
+% where the grid is similar to the one we use to recover the values.
+% 2. Using the point estimates (from U) and generating the BOLD signal directly
+% from the RPE trajectory.
+DATA_GENERATION = 'grid'; % Type of data generation process.
+assert(strcmp(DATA_GENERATION, 'grid') || strcmp(DATA_GENERATION, 'point'), ...
+           'Data generation process has to be point or grid')
+
+% Setup of simulation parameters of the VOI:
+voi_alpha = [0, 1/3, 2/3, 1]; 
 voi_eta = [-1, 0, 1];
 voi_noise =  [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3];
+nnoise = length(voi_noise);
+nparams = length(voi_alpha) * length(voi_eta);
+% The resolution of the different grids, generation grid will only be used when
+% DATA_GENERATION = grid.
+recovery_grid_resolution = 40;
+generation_grid_resolution = 3;
 
+% Support over the parameters in the generation and recovery grid.
+alpha_support = [0, 1];
+eta_support = [-1.5, 1.5];
+
+% Creating the generation grid, if necessary
 if strcmp(DATA_GENERATION, 'grid')
-    gen_grid.alpha = [0, 1, 3];
-    gen_grid.eta = [-1.5, 1.5, 3];
+    gen_grid.alpha = [alpha_support(:), generation_grid_resolution];
+    gen_grid.eta = [eta_support(:), generation_grid_resolution];
 end
 
-recovery_grid_points = 40;
-
-% We do not yet really need to use the whole PRF structure, but can use our
-% functions to simulate a U structure and generate data from it.
-TR = 0.592;
-
-file="tsvfile1.tsv";
-dt = TR / 8; % Assuming classical SPM approach 
+%% =============== SIMULATING DATA ===============
+% Preparing behavioural data for the simulation:
+% Implementation note here: cpm_precompute requires data to only have the fields
+% dur, dt, and ons. Everything else is further passed to the generation
+% functions. In this case S and C which contain the complete serial compound
+% vector and the wealth trajectory.
 data = [];
-
 [trial_n, ~, ~, S, stimuli, C, onsets] = cpm_prepare_experiment_data(file);
 data.dur = ones(3 * trial_n, 1) .* 2 .* dt;
 data.dt = ones(3 * trial_n, 1) .* dt;
@@ -48,21 +81,22 @@ data.ons = onsets;
 data.C = C;
 data.S = S;
 
-% We need to create a simple SPM struct to create our PRF structure:
+% The BayesPRF requires an SPM struct, but only a few fields from there, which
+% we generate here:
 SPM = {};
 SPM.xY.RT = TR;
-SPM.swd = '';
-% And we have to set a few options;
+SPM.swd = ''; % this field will be overwritten by CPM.
+
+% These are hte options used by BayesPRF:
 options.name='recovery'; % PRF file tag
 options.TE=0.03;      % Echo time (you may add other options from BayespRF)
-options.model='spm_prf_response';
+options.model='spm_prf_response'; % We use a modified version of this function.
 
-% estimate dependent on TR:
-nscans = ceil(max(onsets) / TR);
-disp(nscans)
-% any input data structure must contain the fields: ons dur dt
-% Other than that, you may add fields in which ever way you want (in this
-% case C and S)
+% As we are using a simulation we can infer the number of scans from the onsets
+% and the TR:
+if isnan(nscans)
+    nscans = ceil(max(onsets) / TR);
+end
 
 %% Select grid model & precompute
 model = "cpm_grid_RPE"; % user defined model, see cpm_grid_template for details
@@ -70,60 +104,79 @@ model = "cpm_grid_RPE"; % user defined model, see cpm_grid_template for details
 fixedparams.gamma=1;  % these fieldnames must be the same fieldnames used in the cpm_grid
 fixedparams.Lambda=0.99;
 
-% To generate real point estimates for the values of the paper (namely learning
-% rates of 0, 1/3, 2/3, and 1, we have to resort to a little trick in
-% precomputation:
-[d1, d2] = ndgrid(voi_tau, voi_eta);
+% We create all combinations of parameters eta and alpha here for our simulated VOI:
+[d1, d2] = ndgrid(voi_alpha, voi_eta);
 voi_params = [d1(:), d2(:)];
-
-
-nvoxels = length(voi_params) * length(voi_noise);
-
+% The number of voxels is hte number of combinations and the number of noise
+% levels:
+nvoxels = nparams * nnoise;
+% Pre allocating:
 y = zeros(nscans, nvoxels);
-xyz = zeros(3, nvoxels);
+% The voxel location is meaningless in our simulation, 
+% but we used it to store noise level and indexes in the parameter space
+xyz = zeros(3, nvoxels); 
 
 
 if ~ exist('simulationfiles/simVOI.mat', 'file') || REDO
 
-    for vidx = 1 : length(voi_params)
-            grid = [];
-            U_voi = [];
+    for vidx = 1 : nparams
+        % For safety clearing previously set values
+        grid = [];
+        U_voi = [];
+        % BOLD generation block:
+        if strcmp(DATA_GENERATION, 'point')
+            % In the point process of data generation we create an RPE sequence
+            % for a single point (this could be cleaner, but staying like this
+            % for now). 
+            % Create a grid from the parameter settings:
+            grid.alpha = [voi_params(vidx, 1), voi_params(vidx, 1), 1];
+            grid.eta = [voi_params(vidx, 2), voi_params(vidx, 2), 1];
+            % Generate a grid:
+            U_voi = cpm_precompute(model, grid, fixedparams, data, 'tmpfiles/simU.mat', true);
+            % Inferring BOLD response from BOLD priors using the RPE sequence
+            % directly as neural input.
+            tmpy = cpm_generate_from_U(U_voi, 1, TR, nscans, 'cpm_obv_int');
 
-            if strcmp(DATA_GENERATION, 'point')
-                grid.alpha = [voi_params(vidx, 1), voi_params(vidx, 1), 1];
-                grid.eta = [voi_params(vidx, 2), voi_params(vidx, 2), 1];
-
-                U_voi = cpm_precompute(model, grid, fixedparams, data, 'tmpfiles/simU.mat', true);
-                tmpy = cpm_generate_from_U(U_voi, 1, TR, nscans, 'cpm_obv_int'); % simulating bold using priors
-
-            elseif strcmp(DATA_GENERATION, 'grid')
- 
-                U_voi = cpm_precompute(model, gen_grid, fixedparams, data, 'tmpfiles/simU.mat', true);
-                tmpPRF = cpm_specify(SPM, options, zeros(nscans, 1), ...
-                                                       zeros(3, 1), U_voi, 'cpm_RF_Gaussian', 'cpm_obv_int', 'tmpfiles/');
-
-                tmpPE = spm_vec(tmpPRF.M.pE{1});
-                % Inverse of latent transformation
-                lalpha = norminv((voi_params(vidx, 1) - gen_grid.alpha(1)) ./ (gen_grid.alpha(2) - gen_grid.alpha(1)));
-                leta = norminv((voi_params(vidx, 2) - gen_grid.eta(1)) ./ (gen_grid.eta(2) - gen_grid.eta(1)));
-                tmpPE([1, 2]) = [lalpha, leta];
-                tmpPE = spm_unvec(tmpPE, tmpPRF.M.pE{1});
-                tmpy =  spm_prf_response(tmpPE, tmpPRF.M, tmpPRF.U);
-
+        elseif strcmp(DATA_GENERATION, 'grid')
+            % in the grid generation we use a grid over a number of points and
+            % generat the BOLD response over the grid using the generative
+            % process described by the CPM model
+            if REDO && vidx == 1 % the Grid needs to be oncly created once, so here we load it or recreat it if necessary
+                U_voi = cpm_precompute(model, gen_grid, fixedparams, data, 'tmpfiles/simU_grid.mat', true);
+            else
+                 U_voi = cpm_precompute(model, gen_grid, fixedparams, data, 'tmpfiles/simU_grid.mat', false);
             end
-            
-            for nidx = 1 : length(voi_noise)
-                tmp_idx = vidx +  (nidx - 1) * length(voi_params);
-                y(:, tmp_idx) = tmpy +  normrnd(0, voi_noise(nidx),[nscans,1]);
-                xyz(1, tmp_idx) = vidx;
-                xyz(2, tmp_idx) = nidx;
-            end
+            % We generate a temporary PRF file, to generate prior values and some additional options:
+            tmpPRF = cpm_specify(SPM, options, zeros(nscans, 1), ...
+                                                  zeros(3, 1), U_voi, 'cpm_RF_Gaussian', 'cpm_obv_int', 'tmpfiles/');
+            % We get the prior values of the latent(!!) parameters
+            tmpPE = spm_vec(tmpPRF.M.pE{1});
+            % As we define the to be simulated values in native space we have to
+            % transform them into the laten space:
+            lalpha = norminv((voi_params(vidx, 1) - gen_grid.alpha(1)) ./ (gen_grid.alpha(2) - gen_grid.alpha(1)));
+            leta = norminv((voi_params(vidx, 2) - gen_grid.eta(1)) ./ (gen_grid.eta(2) - gen_grid.eta(1)));
+            % we overwrite values accordingly in the prior structure:
+            tmpPE.lmu_alpha = lalpha;
+            tmpPE.lmu_eta = leta;
+            tmpy =  spm_prf_response(tmpPE, tmpPRF.M, tmpPRF.U);
+
+        end
+        
+        % After having generated the BOLD signal we add simulated noise:
+        for nidx = 1 : nnoise
+            tmp_idx = vidx +  (nidx - 1) * length(voi_params);
+            % normrand with 0 variance returns the distributions mean:
+            y(:, tmp_idx) = tmpy +  normrnd(0, voi_noise(nidx), [nscans,1]);
+            xyz(1, tmp_idx) = vidx;
+            xyz(2, tmp_idx) = nidx;
+        end
     end
-
+    
+    % Storing and saving the VOI in SPM format:
     VOI.xY.y = y;
     VOI.xY.XYZmm = xyz;
+    % Mean values for completeness
     VOI.y = mean(y, 2); % for completeness
-
     save('simulationfiles/simVOI.mat', 'VOI')
 
 else
@@ -131,35 +184,38 @@ else
     VOI = VOI.VOI;
 end
 
-%% Parameter recovery
-
+%% ===================== MODEL INVERSION ======================
 outpath='simulationfiles';  % PRF file path
-% Now we can use precompute for the real grid:
+% Now we generate / precompute the recovery grid:
 grid = [];
-grid.alpha = [0, 1, 40];
-grid.eta = [-1.5, 1.5, 40];
+grid.alpha = [alpha_support(:), recovery_grid_resolution];
+grid.eta = [eta_support(:), recovery_grid_resolution];
 
 U_recovery = cpm_precompute(model, grid, fixedparams, data, 'simulationfiles/U_recovery', REDO);
 
-PRF = cpm_specify(SPM, options, VOI.xY.y, VOI.xY.XYZmm, U_recovery, 'cpm_RF_Gaussian', 'cpm_obv_int', outpath);
+% And specify the PRF for recovery:
+PRF = cpm_specify(SPM, options, VOI.xY.y, VOI.xY.XYZmm, ...
+                   U_recovery, 'cpm_RF_Gaussian', 'cpm_obv_int', outpath);
 
-%% Estimation
 voxels = []; % or select subset of voxels of interest
 use_par = true; % to use a parallel for loop or not in voxel estimation;
-PRF.M.noprint = 1; % to suppress spm outputs
+PRF.M.noprint = 0; % to suppress spm outputs
 
 if ~exist('simulationfiles/PRFn.mat', 'file') || REDO
-PRFn = cpm_estimate(PRF, voxels, use_par);
-save('simulationfiles/PRFn.mat', 'PRFn'),
+    PRFn = cpm_estimate(PRF, voxels, use_par);
+    save('simulationfiles/PRFn.mat', 'PRFn'),
 else
     PRFn = load('simulationfiles/PRFn.mat');
     PRFn = PRFn.PRFn;
 end
-%%
-% TODO add titles etc.
-visualize_recovery(PRFn, [1 : 12] + (12 * (find(voi_noise == 0.0) - 1)), voi_params)
 
-visualize_recovery(PRFn, [1 : 12] + (12 * (find(voi_noise == 0.3) - 1)), voi_params)
+%% ===================== VISUALIZATION OF RECOVERED PARAMS
+
+visualize_recovery(PRFn, 1 : nparams + (nparams * (find(voi_noise == 0.0) - 1)), voi_params)
+
+visualize_recovery(PRFn, 1 : nparams+ (nparams * (find(voi_noise == 0.3) - 1)), voi_params)
+
+
 %% Perform model reduction
 
 % Models in comparison
@@ -168,49 +224,49 @@ visualize_recovery(PRFn, [1 : 12] + (12 * (find(voi_noise == 0.3) - 1)), voi_par
 % 3 no-learning / utility
 % 4 full model
 
-if false
-reducedF = zeros(3, nvoxels);
-% Storing prior estimates (same across voxels)
-pE = PRFn.M.pE{1};
-pC = PRFn.M.pC{1};
+% I think this is how the current model comparison is implemented and I have
+% quite some issues with it. We shold discuss this!!! 
+reducedF = zeros(4, nvoxels);
 
-% Using the following order of values in the vectors:
-disp(pE)
 for vidx = 1 : nvoxels
-        % Null model
-        rE = spm_vec(pE); 
-        rC = spm_vec(pC);
-        rE([3, 4]) = -4;  % setting all parameters of interest to small values except for lmu_eta, as 0 = no utility modulation
-        rC([1, 2]) = 0; % Allowing no covariance.
-        reducedF(1, vidx) = cpm_model_reduction(PRFn, vidx, rE, rC); %+ PRFn.F(vidx);
+        pE = PRFn.M.pE{vidx};
+        pC = PRFn.M.pC{vidx};
+        % Null model 
+        % FIXME : I have huge issues with this - this is how we have coded it
+        % so far afaik.
+        rE0 = spm_vec(pE); 
+        rC0 = spm_vec(pC);
+        rE0([3, 4]) = 0;  % setting all parameters of interest to small values except for lmu_eta, as 0 = no utility modulation
+        rC0([1, 2]) = 0; % Allowing no covariance.
+        reducedF(1, vidx) = cpm_model_reduction(PRFn, vidx, rE0, rC0) + PRFn.F(vidx);
         % learning no utility:
-        rE = spm_vec(pE); 
-        rC = spm_vec(pC);
-        rE([4]) = -4;  
-        rC([2]) = 0; % Allowing no covariance.
-        reducedF(2, vidx) = cpm_model_reduction(PRFn, vidx, rE, rC); % + PRFn.F(vidx);
+        rE10 = spm_vec(pE); 
+        rC10 = spm_vec(pC);
+        rE10([4]) = -4;  
+        rC10([2]) = 0; % Allowing no covariance.
+        reducedF(2, vidx) = cpm_model_reduction(PRFn, vidx, rE10, rC10)  + PRFn.F(vidx);
         % no learning utility
-        %         rE = spm_vec(pE); 
-        %         rC = spm_vec(pC);
-        %         rE([1, 3]) = -8.5;  
-        %         rC([1, 3]) = 0; % Allowing no covariance
-        %         reducedF(3, vidx) = cpm_model_reduction(PRFn, vidx, rE, rC) + PRFn.F(vidx);
-        
-%         reducedF(3, vidx) =  PRFn.F(vidx);
-end
+        rE01 = spm_vec(pE); 
+        rC01 = spm_vec(pC);
+        rE01([1]) = -8.5;  
+        rC01([3]) = 0; % Allowing no covariance
+        reducedF(3, vidx) = cpm_model_reduction(PRFn, vidx, rE01, rC01) + PRFn.F(vidx);
 
+        reducedF(4, vidx) =  PRFn.F(vidx);
+end
+%%
 %% Extract Comparisons
 % Param idx for null model:
 nullidx = find(voi_params(:, 1) == 0 & voi_params(:, 2) == 0);
 % Param idx for no-learning
-nolearningidx =  find(voi_params(:, 1) == 0);
+nolearningidx =  find(voi_params(:, 1) == 0 & voi_params(:, 2) ~= 0);
 % Param idx for no-utility
-noutilityidx =  find(voi_params(:, 2) == 0);
+noutilityidx =  find(voi_params(:, 2) == 0  & voi_params(:, 1) ~= 0) ;
 % Param idx for full models
 fullidx = find(voi_params(:, 1) ~= 0 & voi_params(:, 2) ~= 0);
-
 % Model Comparison for nullmodel:
-null_voxels =  [nullidx : 12 : nvoxels];
+
+null_voxels =  [nullidx : nparams : nvoxels];
 
 o = {};
 
@@ -224,7 +280,7 @@ for nvidx = null_voxels
     
     logBF(1, cc)  = reducedF(1, nvidx) - reducedF(2, nvidx);
     logBF(2, cc)  = reducedF(1, nvidx) - reducedF(3, nvidx);
-    [~, o] = VBA_groupBMC(reducedF(:, nvidx) + PRFn.F(:, nvidx));
+    [~, o] = VBA_groupBMC(reducedF(:, nvidx), vba_options);
     exceedenceP(:, cc) = o.ep;
     
     cc = cc + 1;
@@ -244,5 +300,59 @@ xlim([0 0.35]);
 title('Bayes factors of null model');
 legend('reward-learning','utility-learning');
 %%
-nou_voxels =  repmat(noutilityidx, 1 , length(voi_noise)) +   [0 : length(voi_noise) - 1] * 12;
+nol_voxels =  repmat(nolearningidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+
+logBF  = nan([2, size(nol_voxels, 2), size(nol_voxels, 1)]);
+exceedenceP = nan(3, size(nol_voxels, 2));
+
+cc = 1;
+for kk = nol_voxels
+    logBF(1, cc, :) =  reducedF(2, kk) - reducedF(1, kk);
+    logBF(2, cc, :) =  reducedF(2, kk) - reducedF(3, kk);
+    [~, o] = VBA_groupBMC(reducedF(:, kk), vba_options);
+    exceedenceP(:, cc) = o.ep;
+    cc = cc + 1;
 end
+
+figure;
+bar(voi_noise, exceedenceP);
+%%
+x = voi_noise;
+figure;
+plot(x, squeeze(logBF(1, :, :)),'*','Color','#D95319');
+hold on
+plot(x, squeeze(logBF(2, :, :)),'^','Color','#EDB120');
+xlim([0 0.35]);
+% ylim([0 inf]);
+title('Bayes factors of null model');
+legend('reward-learning','utility-learning');
+% logBF(1, :, :)
+% end
+
+%%
+full_voxels =  repmat(fullidx, 1 , length(voi_noise)) +   (0 : nnoise - 1) * nparams;
+
+logBF  = nan([2, size(full_voxels, 2), size(full_voxels, 1)]);
+exceedenceP = nan(3, size(full_voxels, 2));
+
+cc = 1;
+for kk = full_voxels
+    logBF(1, cc, :) =  reducedF(3, kk) - reducedF(1, kk);
+    logBF(2, cc, :) =  reducedF(3, kk) - reducedF(2, kk);
+    [~, o] = VBA_groupBMC(reducedF(:, kk), vba_options);
+    exceedenceP(:, cc) = o.ep;
+    cc = cc + 1;
+end
+
+figure;
+bar(voi_noise, exceedenceP);
+%%
+x = voi_noise;
+figure;
+plot(x, squeeze(logBF(1, :, :)),'*','Color','#D95319');
+hold on
+plot(x, squeeze(logBF(2, :, :)),'^','Color','#EDB120');
+xlim([0 0.35]);
+% ylim([0 inf]);
+title('Bayes factors of null model');
+legend('reward-learning','utility-learning');
