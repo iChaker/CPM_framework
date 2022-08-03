@@ -102,8 +102,8 @@ end
 %% Select grid model & precompute
 model = "cpm_grid_RPE"; % user defined model, see cpm_grid_template for details
 
-fixedparams.gamma=1;  % these fieldnames must be the same fieldnames used in the cpm_grid
-fixedparams.Lambda=0.99;
+fixedparams.gamma=0.97;  % these fieldnames must be the same fieldnames used in the cpm_grid
+fixedparams.Lambda=1.0;
 
 % We create all combinations of parameters eta and alpha here for our simulated VOI:
 [d1, d2] = ndgrid(voi_alpha, voi_eta);
@@ -113,10 +113,10 @@ voi_params = [d1(:), d2(:)];
 nvoxels = nparams * nnoise;
 % Pre allocating:
 y = zeros(nscans, nvoxels);
+states = [];
 % The voxel location is meaningless in our simulation, 
 % but we used it to store noise level and indexes in the parameter space
 xyz = zeros(3, nvoxels); 
-
 
 if ~ exist('simulationfiles/simVOI.mat', 'file') || REDO
 
@@ -136,8 +136,9 @@ if ~ exist('simulationfiles/simVOI.mat', 'file') || REDO
             U_voi = cpm_precompute(model, grid, fixedparams, data, 'tmpfiles/simU.mat', true);
             % Inferring BOLD response from BOLD priors using the RPE sequence
             % directly as neural input.
-            tmpy = cpm_generate_from_U(U_voi, 1, TR, nscans, 'cpm_obv_int');
-
+            [tmpy, stat] = cpm_generate_from_U(U_voi, 1, TR, nscans, 'cpm_obv_int');
+            states = [states, stat];
+            
         elseif strcmp(DATA_GENERATION, 'grid')
             % in the grid generation we use a grid over a number of points and
             % generat the BOLD response over the grid using the generative
@@ -156,17 +157,17 @@ if ~ exist('simulationfiles/simVOI.mat', 'file') || REDO
             % transform them into the laten space:
             lalpha = norminv((voi_params(vidx, 1) - gen_grid.alpha(1)) ./ (gen_grid.alpha(2) - gen_grid.alpha(1)));
             leta = norminv((voi_params(vidx, 2) - gen_grid.eta(1)) ./ (gen_grid.eta(2) - gen_grid.eta(1)));
-
             % we overwrite values accordingly in the prior structure:
             tmpPE.lmu_alpha = lalpha;
             tmpPE.lmu_eta = leta;
             tmpPE.lsigma_alpha =  norminv(exp(-5) ./ 2); % Sigma is bounded in our case between 0 and -2 
             tmpPE.lsigma_eta =  norminv(exp(-5) ./ 2); % 
             disp(cpm_get_true_parameters(tmpPE, tmpPRF.M, tmpPRF.U))
-            tmpy =  spm_prf_response(tmpPE, tmpPRF.M, tmpPRF.U);
+            [tmpy, stat] =  spm_prf_response(tmpPE, tmpPRF.M, tmpPRF.U);
+            % Saving hidden states of the model for later investigation
+            states = [states, stat.u];
 
         end
-        
         % After having generated the BOLD signal we add simulated noise:
         for nidx = 1 : nnoise
             tmp_idx = vidx +  (nidx - 1) * length(voi_params);
@@ -216,10 +217,9 @@ end
 %% ===================== VISUALIZATION OF RECOVERED PARAMS
 nlevel = 0.0;
 visualize_idx =  1 + (nparams * (find(voi_noise == nlevel) - 1)) : nparams + (nparams * (find(voi_noise == nlevel) - 1));
-fig1 = visualize_recovery(PRFn, visualize_idx, voi_params);
+fig1 = visualize_recovery(PRFn, visualize_idx, voi_params, 4, true, 100);
 sgtitle(sprintf('Parameter recovery with noise %4.2f', nlevel))
-
-% saveas(fig1, sprintf('results/parameter_recovery_noise_%4.2f_%s.png', nlevel, DATA_GENERATION))
+%
 print(fig1, sprintf('results/parameter_recovery_noise_%4.2f_%s.png', nlevel, DATA_GENERATION), '-dpng', '-r600');
 %%
 %% Perform model reduction
@@ -260,7 +260,6 @@ for vidx = 1 : nvoxels
         reducedF(4, vidx) =  PRFn.F(vidx);
 end
 
-
 %% Model Comparison for nullmodel:
 [logBF, exceedenceP, comparisons] = deal({}, {}, {});
 % Param idx which generated 0 models:
@@ -296,6 +295,7 @@ colors = [[0, 0.4470, 0.7410]; [0.8500, 0.3250, 0.0980]; ...
                 [0.9290, 0.6940, 0.1250]; [0.4940, 0.1840, 0.5560]];
 markers = {'o', 'x', 's', 'p'};
 
+% Plot RFX exceedence probabilities
 for ii = 1 : 4
     subplot(2, 4, ii)
     bar(voi_noise, exceedenceP{ii});
@@ -304,7 +304,7 @@ for ii = 1 : 4
     xlabel('Noise level')
     ylabel('Exceendence Probability')
 end
-
+% Plot Bayes Factor for the different comparisons.
 for ii = 1  : 4
     subplot(2, 4, ii + 4)
     h = {};
@@ -325,3 +325,67 @@ end
 sgtitle( 'Model Comparisons')
 
 print(fig2, sprintf('results/model_recovery_%s.png', DATA_GENERATION), '-dpng', '-r600');
+
+
+%% Parameter recovery statistics
+% it gets a bit messy here
+
+% Extracting and saving the true parameters, which generated the data in the
+% simulation.
+rec_params = zeros(8, nvoxels);
+true_params = zeros(8, nvoxels);
+
+for vidx = 1 : nvoxels
+    % Posterior values
+    tmpparams = cpm_get_true_parameters(PRFn.Ep{vidx}, PRF.M, PRF.U);
+    tmpparams = spm_vec(tmpparams);
+    rec_params(:, vidx) = tmpparams;
+    
+    % Prior values (they've mostly been used in the simulation)
+    tmpparams = cpm_get_true_parameters(PRFn.M.pE{vidx}, PRF.M, PRF.U);
+    tmpparams = spm_vec(tmpparams);
+    true_params(:, vidx) = tmpparams;
+    
+    true_params(1 : 2, vidx) = voi_params(mod(vidx -1, nparams) + 1, :);
+    true_params(3 : 4, vidx) = [exp(-5), exp(-5)];
+end
+
+% Reshaping to shape: parameters in model, voxels, noise levels
+ true_params = reshape(true_params, 8, [], nnoise);
+ rec_params = reshape(rec_params, 8, [], nnoise);
+
+ %%  RMSE (Euclidean distance)
+rmse = squeeze(sqrt(mean((true_params - rec_params).^2, 2)));
+fig3 = figure('Color', 'none', 'Units', 'pixels', 'Position', [0, 0, 1600, 1200]);
+param_names =  {'\mu_\alpha', '\mu_\eta', '\sigma_\alpha', '\sigma_\eta', '\beta', 'transit', 'decay', '\epsilon'};
+noise_names =strsplit(num2str(voi_noise));
+
+heatmap(param_names, noise_names, rmse');
+xlabel('Parameter');
+ylabel('Noise level');
+title('Euclidean distane to true parameters');
+print(fig3, sprintf('results/parameter_distance_noise_%4.2f_%s.png', nlevel, DATA_GENERATION), '-dpng', '-r600');
+
+
+%% Visualization sugar
+% here it gets messy, not sure yet what these parts could be really used for,
+% but it allows to plot and estimate predicted hidden states for the model and
+% comparison to the true values, stored in "y" and states, states is maximally
+% of length nparams, because they are not influence by noise.
+% y_pred = [];
+% z_pred = [];
+% 
+% for vidx = 1 : nvoxels
+%     % genrating predictions
+%     [tmpy, tmpz] = spm_prf_response(PRFn.Ep{vidx}, PRFn.M, PRFn.U);
+%     y_pred = [y_pred, tmpy];
+%     z_pred = [z_pred, tmpz.u];
+% end
+%%
+% figure;
+% 
+% for ii = 1% : nparams
+% subplot(3, 4, ii)
+% plot(z_pred(:, 12) - states(:, ii))
+% hold on
+% end
