@@ -24,7 +24,8 @@ mkdir("tmpfiles"); % Create a directory for temporary files which will be ignore
 mkdir("simulationfiles");
 
 %% ======== SIMULATION SETUP =======================
-REDO = false; % Overwrites everything instead of loading temporary files.
+REDO = true; % Overwrites everything instead of loading temporary files.
+use_par = true; % to use a parallel for loop or not in voxel estimation;
 
 % We can freely chose for which TR we want to simulate data, we use the TR from
 % a previous project of ours. 
@@ -63,8 +64,8 @@ eta_support = [-1.5, 1.5];
 
 % Creating the generation grid, if necessary
 if strcmp(DATA_GENERATION, 'grid')
-    gen_grid.alpha = [alpha_support(:), generation_grid_resolution];
-    gen_grid.eta = [eta_support(:), generation_grid_resolution];
+    gen_grid.alpha = [alpha_support, generation_grid_resolution];
+    gen_grid.eta = [eta_support, generation_grid_resolution];
 end
 
 %% =============== SIMULATING DATA ===============
@@ -150,14 +151,18 @@ if ~ exist('simulationfiles/simVOI.mat', 'file') || REDO
             tmpPRF = cpm_specify(SPM, options, zeros(nscans, 1), ...
                                                   zeros(3, 1), U_voi, 'cpm_RF_Gaussian', 'cpm_obv_int', 'tmpfiles/');
             % We get the prior values of the latent(!!) parameters
-            tmpPE = spm_vec(tmpPRF.M.pE{1});
+            tmpPE = tmpPRF.M.pE{1};
             % As we define the to be simulated values in native space we have to
             % transform them into the laten space:
             lalpha = norminv((voi_params(vidx, 1) - gen_grid.alpha(1)) ./ (gen_grid.alpha(2) - gen_grid.alpha(1)));
             leta = norminv((voi_params(vidx, 2) - gen_grid.eta(1)) ./ (gen_grid.eta(2) - gen_grid.eta(1)));
+
             % we overwrite values accordingly in the prior structure:
             tmpPE.lmu_alpha = lalpha;
             tmpPE.lmu_eta = leta;
+            tmpPE.lsigma_alpha =  norminv(exp(-5) ./ 2); % Sigma is bounded in our case between 0 and -2 
+            tmpPE.lsigma_eta =  norminv(exp(-5) ./ 2); % 
+            disp(cpm_get_true_parameters(tmpPE, tmpPRF.M, tmpPRF.U))
             tmpy =  spm_prf_response(tmpPE, tmpPRF.M, tmpPRF.U);
 
         end
@@ -188,8 +193,8 @@ end
 outpath='simulationfiles';  % PRF file path
 % Now we generate / precompute the recovery grid:
 grid = [];
-grid.alpha = [alpha_support(:), recovery_grid_resolution];
-grid.eta = [eta_support(:), recovery_grid_resolution];
+grid.alpha = [alpha_support, recovery_grid_resolution];
+grid.eta = [eta_support, recovery_grid_resolution];
 
 U_recovery = cpm_precompute(model, grid, fixedparams, data, 'simulationfiles/U_recovery', REDO);
 
@@ -198,7 +203,6 @@ PRF = cpm_specify(SPM, options, VOI.xY.y, VOI.xY.XYZmm, ...
                    U_recovery, 'cpm_RF_Gaussian', 'cpm_obv_int', outpath);
 
 voxels = []; % or select subset of voxels of interest
-use_par = true; % to use a parallel for loop or not in voxel estimation;
 PRF.M.noprint = 0; % to suppress spm outputs
 
 if ~exist('simulationfiles/PRFn.mat', 'file') || REDO
@@ -210,13 +214,12 @@ else
 end
 
 %% ===================== VISUALIZATION OF RECOVERED PARAMS
-nlevel = 0.3;
+nlevel = 0.0;
 visualize_recovery(PRFn, 1 + (nparams * (find(voi_noise == nlevel) - 1))  : nparams + (nparams * (find(voi_noise == nlevel) - 1)), voi_params)
 sgtitle(sprintf('Parameter recovery with noise %4.2f', nlevel))
 
 %%
 %% Perform model reduction
-
 % Models in comparison
 % 1 no-learning / no-utility
 % 2 learning / no-utility
@@ -247,111 +250,71 @@ for vidx = 1 : nvoxels
         % no learning utility
         rE01 = spm_vec(pE); 
         rC01 = spm_vec(pC);
-        rE01([1]) = -8.5;  
+        rE01([1]) = -4;  
         rC01([3]) = 0; % Allowing no covariance
         reducedF(3, vidx) = cpm_model_reduction(PRFn, vidx, rE01, rC01) + PRFn.F(vidx);
-
+        % Storing full model
         reducedF(4, vidx) =  PRFn.F(vidx);
 end
-%%
-%% Extract Comparisons
-% Param idx for null model:
+
+
+%% Model Comparison for nullmodel:
+[logBF, exceedenceP, comparisons] = deal({}, {}, {});
+% Param idx which generated 0 models:
 nullidx = find(voi_params(:, 1) == 0 & voi_params(:, 2) == 0);
-% Param idx for no-learning
-nolearningidx =  find(voi_params(:, 1) == 0 & voi_params(:, 2) ~= 0);
-% Param idx for no-utility
-noutilityidx =  find(voi_params(:, 2) == 0  & voi_params(:, 1) ~= 0) ;
-% Param idx for full models
-fullidx = find(voi_params(:, 1) ~= 0 & voi_params(:, 2) ~= 0);
-% Model Comparison for nullmodel:
+null_voxels =  repmat(nullidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+[logBF{1}, exceedenceP{1}, comparisons{1}]  = cpm_model_comparison(reducedF, null_voxels, 1);
 
-null_voxels =  [nullidx : nparams : nvoxels];
+% Model comparisons for no utility model:
+% Param idx for no-utility - including no learning, i.e. 0 model is included
+noutilityidx =  find(voi_params(:, 2) == 0);
+nou_voxels =  repmat(noutilityidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+[logBF{2}, exceedenceP{2}, comparisons{2}]  = cpm_model_comparison(reducedF, nou_voxels, 2);
 
-o = {};
-
-cc = 1;
-
-logBF = zeros(2, length(null_voxels));
-exceedenceP = zeros(3, length(null_voxels));
-vba_options.DisplayWin = 0;
-
-for nvidx = null_voxels
-    
-    logBF(1, cc)  = reducedF(1, nvidx) - reducedF(2, nvidx);
-    logBF(2, cc)  = reducedF(1, nvidx) - reducedF(3, nvidx);
-    [~, o] = VBA_groupBMC(reducedF(:, nvidx), vba_options);
-    exceedenceP(:, cc) = o.ep;
-    
-    cc = cc + 1;
-end
-
-%%
-figure;
-bar(voi_noise, exceedenceP);
-%%
-x = voi_noise;
-figure;
-plot(x,logBF(1, :),'*','Color','#D95319');
-hold on
-plot(x,logBF(2, :),'^','Color','#EDB120');
-xlim([0 0.35]);
-% ylim([0 inf]);
-title('Bayes factors of null model');
-legend('reward-learning','utility-learning');
-%%
+% Model comparisons for no learning model:
+% Param idx for no-learning - including no utility, i.e. 0 model is included
+nolearningidx =  find(voi_params(:, 1) == 0);
 nol_voxels =  repmat(nolearningidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+[logBF{3}, exceedenceP{3}, comparisons{3}]  = cpm_model_comparison(reducedF, nol_voxels, 3);
 
-logBF  = nan([2, size(nol_voxels, 2), size(nol_voxels, 1)]);
-exceedenceP = nan(3, size(nol_voxels, 2));
+% Model comparisons for full model:
+% Param idx for full models excluding all 0 models
+fullidx = find(voi_params(:, 1) ~= 0 & voi_params(:, 2) ~= 0);
+full_voxels =  repmat(fullidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+[logBF{4}, exceedenceP{4}, comparisons{4}]  = cpm_model_comparison(reducedF, full_voxels, 4);
 
-cc = 1;
-for kk = nol_voxels
-    logBF(1, cc, :) =  reducedF(2, kk) - reducedF(1, kk);
-    logBF(2, cc, :) =  reducedF(2, kk) - reducedF(3, kk);
-    [~, o] = VBA_groupBMC(reducedF(:, kk), vba_options);
-    exceedenceP(:, cc) = o.ep;
-    cc = cc + 1;
+%% Result plotting
+figure;
+ep_titles = {'Null-Model', 'No-utility', 'No-learning', 'Full'};
+
+colors = [[0, 0.4470, 0.7410]; [0.8500, 0.3250, 0.0980]; ...
+                [0.9290, 0.6940, 0.1250]; [0.4940, 0.1840, 0.5560]];
+markers = {'o', 'x', 's', 'p'};
+
+for ii = 1 : 4
+    subplot(2, 4, ii)
+    bar(voi_noise, exceedenceP{ii});
+    legend({'Null', 'learning', 'utility', 'full'});
+    title(ep_titles{ii})
+    xlabel('Noise level')
+    ylabel('Exceendence Probability')
 end
 
-figure;
-bar(voi_noise, exceedenceP);
-%%
-x = voi_noise;
-figure;
-plot(x, squeeze(logBF(1, :, :)),'*','Color','#D95319');
-hold on
-plot(x, squeeze(logBF(2, :, :)),'^','Color','#EDB120');
-xlim([0 0.35]);
-% ylim([0 inf]);
-title('Bayes factors of null model');
-legend('reward-learning','utility-learning');
-% logBF(1, :, :)
-% end
-
-%%
-full_voxels =  repmat(fullidx, 1 , length(voi_noise)) +   (0 : nnoise - 1) * nparams;
-
-logBF  = nan([2, size(full_voxels, 2), size(full_voxels, 1)]);
-exceedenceP = nan(3, size(full_voxels, 2));
-
-cc = 1;
-for kk = full_voxels
-    logBF(1, cc, :) =  reducedF(3, kk) - reducedF(1, kk);
-    logBF(2, cc, :) =  reducedF(3, kk) - reducedF(2, kk);
-    [~, o] = VBA_groupBMC(reducedF(:, kk), vba_options);
-    exceedenceP(:, cc) = o.ep;
-    cc = cc + 1;
+for ii = 1  : 4
+    subplot(2, 4, ii + 4)
+    h = {};
+    for jj = 1 : 3
+        h{jj} = semilogy(voi_noise, exp(squeeze(logBF{ii}(jj, :, :))), markers{comparisons{ii}(jj)}, ... 
+                       'Color', colors(comparisons{ii}(jj), :));
+        hold on
+    end
+    
+    larray = [h{1}; h{2}; h{3}];
+    
+    legend(larray(1 : length(h{1}): end), ep_titles(comparisons{ii}));
+    xlabel('Bayes Factor')
+    ylabel('Noise Level')
+    
+    title(sprintf('Bayes factor in Favor of %s', ep_titles{ii}));
 end
-
-figure;
-bar(voi_noise, exceedenceP);
-%%
-x = voi_noise;
-figure;
-plot(x, squeeze(logBF(1, :, :)),'*','Color','#D95319');
-hold on
-plot(x, squeeze(logBF(2, :, :)),'^','Color','#EDB120');
-xlim([0 0.35]);
-% ylim([0 inf]);
-title('Bayes factors of null model');
-legend('reward-learning','utility-learning');
+sgtitle('Model Comparisons /n Data generated by:')
