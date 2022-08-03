@@ -1,4 +1,4 @@
-function visualize_recovery(PRF, voxels, params, ncolumns)
+function fig = visualize_recovery(PRF, voxels, params, ncolumns)
 
 arguments
     PRF
@@ -32,7 +32,7 @@ y_offset = -d2(1);
 x_range= d1(2)-d1(1);
 y_range= d2(2)-d2(1);
 
-figure;
+fig = figure('Color', 'none', 'Units', 'pixels', 'Position', [0, 0, 1600, 1600]);
 
 for vidx = 1 : length(voxels)
 

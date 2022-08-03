@@ -1,3 +1,4 @@
 tmpfiles/
 simulationfiles/
+results/
 *.m~
