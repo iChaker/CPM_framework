@@ -44,13 +44,8 @@ fig = figure('Color', 'none', 'Units', 'pixels', 'Position', [0, 0, 1600, 1600])
 for vidx = 1 : length(voxels)
 
     a = subplot(nrows, ncolumns, vidx);
-    [~, ~, zprior, zpost] = spm_prf_get_ppd(PRF, xy, voxels(vidx), ppd_samples);
+    [~, z] = cpm_prf_get_ppd(PRF, xy, voxels(vidx), ppd_samples, posterior);
     
-    if posterior
-        z = zpost;
-    else
-        z = zprior;
-    end
     hold on;
     z = reshape(z, field_resolution, field_resolution);
     imagesc(z)
