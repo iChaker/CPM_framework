@@ -215,9 +215,9 @@ else
 end
 
 %% ===================== VISUALIZATION OF RECOVERED PARAMS
-nlevel = 0.0;
+nlevel = 0.3;
 visualize_idx =  1 + (nparams * (find(voi_noise == nlevel) - 1)) : nparams + (nparams * (find(voi_noise == nlevel) - 1));
-fig1 = visualize_recovery(PRFn, visualize_idx, voi_params, 4, true, 100);
+fig1 = visualize_recovery(PRFn, visualize_idx, voi_params, 4, true, 40, {'alpha', 'eta'}, 1000);
 sgtitle(sprintf('Parameter recovery with noise %4.2f', nlevel))
 %
 print(fig1, sprintf('results/parameter_recovery_noise_%4.2f_%s.png', nlevel, DATA_GENERATION), '-dpng', '-r600');

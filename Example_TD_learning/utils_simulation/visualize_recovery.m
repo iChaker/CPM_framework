@@ -1,4 +1,4 @@
-function fig = visualize_recovery(PRF, voxels, params, ncolumns, posterior, samples, param_names)
+function fig = visualize_recovery(PRF, voxels, params, ncolumns, posterior, field_resolution, param_names, ppd_samples)
 
 arguments
     PRF
@@ -6,8 +6,9 @@ arguments
     params
     ncolumns = 4
     posterior = true
-    samples = 200
+    field_resolution = 100
     param_names = {'alpha', 'eta'}
+    ppd_samples = 500
 end
 
 % calculate number of rows:
@@ -26,8 +27,8 @@ end
 
 grid = PRF.U(1).grid;
 
-x_bins = linspace(grid.(param_names{1})(1), grid.(param_names{1})(2), samples);
-y_bins = linspace(grid.(param_names{2})(1), grid.(param_names{2})(2), samples);
+x_bins = linspace(grid.(param_names{1})(1), grid.(param_names{1})(2), field_resolution);
+y_bins = linspace(grid.(param_names{2})(1), grid.(param_names{2})(2), field_resolution);
 [x2,y2] = meshgrid(x_bins,y_bins);
 xy = [x2(:) y2(:)];
 
@@ -43,7 +44,7 @@ fig = figure('Color', 'none', 'Units', 'pixels', 'Position', [0, 0, 1600, 1600])
 for vidx = 1 : length(voxels)
 
     a = subplot(nrows, ncolumns, vidx);
-    [~, ~, zprior, zpost] = spm_prf_get_ppd(PRF, xy, voxels(vidx), samples);
+    [~, ~, zprior, zpost] = spm_prf_get_ppd(PRF, xy, voxels(vidx), ppd_samples);
     
     if posterior
         z = zpost;
@@ -51,18 +52,18 @@ for vidx = 1 : length(voxels)
         z = zprior;
     end
     hold on;
-    z = reshape(z, samples, samples);
+    z = reshape(z, field_resolution, field_resolution);
     imagesc(z)
     contour(z)
-    circles(P, x_offset, y_offset, x_range, y_range, samples, param_names)
+    circles(P, x_offset, y_offset, x_range, y_range, field_resolution, param_names)
     xlabel('alpha')
     ylabel('eta')
     
     x_labs = linspace(d1(1), d1(2), 7);
-    x_ticks = (x_labs + x_offset) * samples / x_range;
+    x_ticks = (x_labs + x_offset) * field_resolution / x_range;
     xticks(x_ticks)
     y_labs = linspace(d2(1), d2(2), 7);
-    y_ticks = (y_labs + y_offset) * samples / y_range;
+    y_ticks = (y_labs + y_offset) * field_resolution / y_range;
     yticks(y_ticks)
         
 
