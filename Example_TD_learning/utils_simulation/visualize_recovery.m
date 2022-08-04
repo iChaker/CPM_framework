@@ -51,8 +51,8 @@ for vidx = 1 : length(voxels)
     imagesc(z)
     contour(z)
     circles(P, x_offset, y_offset, x_range, y_range, field_resolution, param_names)
-    xlabel('alpha')
-    ylabel('eta')
+    xlabel(param_names{1})
+    ylabel(param_names{2})
     
     x_labs = linspace(d1(1), d1(2), 7);
     x_ticks = (x_labs + x_offset) * field_resolution / x_range;
@@ -70,7 +70,7 @@ for vidx = 1 : length(voxels)
     xlim([x_ticks(1), x_ticks(end)]);
     ylim([y_ticks(1), y_ticks(end)]);
 
-    title(sprintf('CPM for\n alpha = %4.2f, eta = %4.2f', P(vidx).mu_alpha, P(vidx).mu_eta))
+    title(sprintf('CPM for\n %s = %4.2f, %s = %4.2f', param_names{1}, param_names{2}, P(vidx).(['mu_' param_names{1}]), P(vidx).(['mu_' param_names{2}])));
     set(a, 'dataAspectRatio', [1, 1, 1]);
 end
 
@@ -78,10 +78,26 @@ end
 end
 
 function circles(P, x_offset, y_offset, x_range, y_range, samples, param_names)
+   ax = gca;
    
 for ii = 1 : length(P)
        x = (P(ii).(['mu_' param_names{1}]) + x_offset) * samples / x_range;
-       y = (P(ii).(['mu_' param_names{2}]) + y_offset) * samples / y_range;
+
+       if x > max(ax.XLim)
+           x = max(ax.XLim) -0.5;
+       elseif x < min(ax.XLim)
+           x = min(ax.XLim) +0.5;
+       end
+       
+
+       y = (P(ii).(['mu_' param_names{2}]) + y_offset) * samples / y_range;       
+       
+        if y > max(ax.YLim)
+           y = max(ax.YLim) -0.5;
+       elseif y < min(ax.YLim)
+           y = min(ax.YLim) +0.5;
+       end
         plot(x, y, 'o', 'Color', 'white')
+
 end
 end
