@@ -56,7 +56,7 @@ nparams = length(voi_alpha) * length(voi_eta);
 % The resolution of the different grids, generation grid will only be used when
 % DATA_GENERATION = grid.
 recovery_grid_resolution = 40;
-generation_grid_resolution = 3;
+generation_grid_resolution = 7;
 
 % Support over the parameters in the generation and recovery grid.
 alpha_support = [0, 1];
