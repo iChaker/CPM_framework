@@ -70,7 +70,8 @@ for vidx = 1 : length(voxels)
     xlim([x_ticks(1), x_ticks(end)]);
     ylim([y_ticks(1), y_ticks(end)]);
 
-    title(sprintf('CPM for\n %s = %4.2f, %s = %4.2f', param_names{1}, param_names{2}, P(vidx).(['mu_' param_names{1}]), P(vidx).(['mu_' param_names{2}])));
+    title(sprintf('CPM for\n%s = %4.2f, %s = %4.2f', param_names{1}, P(vidx).(['mu_' param_names{1}]),  ...
+                                                                                  param_names{2}, P(vidx).(['mu_' param_names{2}])));
     set(a, 'dataAspectRatio', [1, 1, 1]);
 end
 
