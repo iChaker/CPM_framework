@@ -219,8 +219,9 @@ nlevel = 0.05;
 visualize_idx =  1 + (nparams * (find(voi_noise == nlevel) - 1)) : nparams + (nparams * (find(voi_noise == nlevel) - 1));
 fig1 = visualize_recovery(PRFn, visualize_idx, voi_params, 4, true, 40, {'alpha', 'eta'}, 500);
 sgtitle(sprintf('Parameter recovery with noise %4.2f', nlevel))
-%
-print(fig1, sprintf('results/parameter_recovery_noise_%4.2f_%s.png', nlevel, DATA_GENERATION), '-dpng', '-r600');
+
+cpm_savefig(fig1,  sprintf('results/parameter_recovery_noise_%4.2f_%s.pdf', nlevel, DATA_GENERATION))
+
 %%
 %% Perform model reduction
 % Models in comparison
@@ -329,12 +330,7 @@ for ii = 1  : 4
 end
 sgtitle( 'Model Comparisons')
 
-print(fig2, sprintf('results/model_recovery_%s.png', DATA_GENERATION), '-dpng', '-r600');
-
-set(fig2,'Units','points');
-pos = get(fig2,'Position');
-set(fig2,'PaperPositionMode','Auto','PaperUnits','points','PaperSize', [pos(3), pos(4)])
-print(fig2, sprintf('results/model_recovery_%s.pdf', DATA_GENERATION), '-dpdf', '-r600');
+cpm_savefig(fig2, sprintf('results/model_recovery_%s.pdf', DATA_GENERATION))
 
 %% Parameter recovery statistics
 % it gets a bit messy here
@@ -373,7 +369,8 @@ heatmap(param_names, noise_names, rmse');
 xlabel('Parameter');
 ylabel('Noise level');
 title('Euclidean distane to true parameters');
-print(fig3, sprintf('results/parameter_distance_noise_%4.2f_%s.png', nlevel, DATA_GENERATION), '-dpng', '-r600');
+
+cpm_savefig(fig3, sprintf('results/parameter_distance_noise_%4.2f_%s.pdf', nlevel, DATA_GENERATION))
 
 
 %% Visualization sugar
