@@ -16,11 +16,16 @@ mu = true_parameters.mu;
 sigma = true_parameters.sigma;
 beta = true_parameters.beta;
 
-V= diag(sigma);
-x = spm_mvNpdf(coords, mu, V) * sqrt(((2*pi)^3)*det(V));
-xx = 1 / sum(x);
+sigma = sigma .* sigma;
+V = diag(sigma);
+x = spm_mvNpdf(coords, mu, V) ; %* sqrt(((2*pi)^3)*det(V));
 
-if ~isfinite(xx)
+%xx = 1 / sum(x) * sqrt(((2*pi)^3)*det(V));
+
+x = x / sum(x);
+
+
+if ~isfinite(sum(x))
     warnstring =[];
     for sig = sigma
         warnstring = [warnstring sprintf(' %4.5f', sig)];
@@ -30,7 +35,7 @@ if ~isfinite(xx)
 end
 
 % Scale
-W = xx .* beta .* x;
+W = beta .* x;
 end
 %% Priors
 function [pE,pC] = get_latent_moment_priors()
@@ -57,8 +62,8 @@ lmu = latent_moments.lmu;
 lsigma = latent_moments.lsigma;
 
 % THESE SHOULD BE HYPERPARAMETERS
-SIGMA_MIN = 0.001;
-SIGMA_MAX = 2;
+SIGMA_MIN = sqrt(0.001);
+SIGMA_MAX = sqrt(2);
 
 mu = ((maxp-minp) .* spm_Ncdf(lmu,0,1)) + minp ;
 sigma= ((SIGMA_MAX-SIGMA_MIN) .* spm_Ncdf(lsigma,0,1)) + SIGMA_MIN ;
