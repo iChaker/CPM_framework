@@ -21,8 +21,8 @@ function output = cpm_grid_RPE(freeparams,fixedparams,data)
                 tau = freeparams.tau;
                 alpha = [ logit_inv(tau - eps), logit_inv(tau + eps)];
         catch
-                error('Grid neither contains alpha nor tau')
-        end
+            alpha = 0;
+         end
     end
 
     

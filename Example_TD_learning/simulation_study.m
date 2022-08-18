@@ -34,7 +34,7 @@ TR = 0.592;
 file="tsvfile1.tsv";
 % dt is the micro resolution, which is often 8 or 20, but for example when slice-time
 % correction has been produced should be set to the number of slices.
-dt = TR / 8; % Assuming classical SPM approach 
+dt = TR / 28; % Assuming classical SPM approach 
 % As this is a simulation, nscans are inferred from the data, but you can change
 % it here manually:
 nscans = nan;
@@ -48,23 +48,23 @@ assert(strcmp(DATA_GENERATION, 'grid') || strcmp(DATA_GENERATION, 'point'), ...
            'Data generation process has to be point or grid')
 
 % Setup of simulation parameters of the VOI:
-voi_alpha = [0, 1/3, 2/3, 1]; 
+voi_tau = cpm_logit([eps, 1/3, 2/3, 1]); 
 voi_eta = [-1, 0, 1];
 voi_noise =  [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3];
 nnoise = length(voi_noise);
-nparams = length(voi_alpha) * length(voi_eta);
+nparams = length(voi_tau) * length(voi_eta);
 % The resolution of the different grids, generation grid will only be used when
 % DATA_GENERATION = grid.
 recovery_grid_resolution = 40;
 generation_grid_resolution = 7;
 
 % Support over the parameters in the generation and recovery grid.
-alpha_support = [0, 1];
+tau_support = [-5, 5];
 eta_support = [-1.5, 1.5];
 
 % Creating the generation grid, if necessary
 if strcmp(DATA_GENERATION, 'grid')
-    gen_grid.alpha = [alpha_support, generation_grid_resolution];
+    gen_grid.tau = [tau_support, generation_grid_resolution];
     gen_grid.eta = [eta_support, generation_grid_resolution];
 end
 
@@ -105,8 +105,8 @@ model = "cpm_grid_RPE"; % user defined model, see cpm_grid_template for details
 fixedparams.gamma=0.97;  % these fieldnames must be the same fieldnames used in the cpm_grid
 fixedparams.Lambda=1.0;
 
-% We create all combinations of parameters eta and alpha here for our simulated VOI:
-[d1, d2] = ndgrid(voi_alpha, voi_eta);
+% We create all combinations of parameters eta and tau here for our simulated VOI:
+[d1, d2] = ndgrid(voi_tau, voi_eta);
 voi_params = [d1(:), d2(:)];
 % The number of voxels is hte number of combinations and the number of noise
 % levels:
@@ -130,7 +130,7 @@ if ~ exist('simulationfiles/simVOI.mat', 'file') || REDO
             % for a single point (this could be cleaner, but staying like this
             % for now). 
             % Create a grid from the parameter settings:
-            grid.alpha = [voi_params(vidx, 1), voi_params(vidx, 1), 1];
+            grid.tau = [voi_params(vidx, 1), voi_params(vidx, 1), 1];
             grid.eta = [voi_params(vidx, 2), voi_params(vidx, 2), 1];
             % Generate a grid:
             U_voi = cpm_precompute(model, grid, fixedparams, data, 'tmpfiles/simU.mat', true);
@@ -155,12 +155,12 @@ if ~ exist('simulationfiles/simVOI.mat', 'file') || REDO
             tmpPE = tmpPRF.M.pE{1};
             % As we define the to be simulated values in native space we have to
             % transform them into the laten space:
-            lalpha = norminv((voi_params(vidx, 1) - gen_grid.alpha(1)) ./ (gen_grid.alpha(2) - gen_grid.alpha(1)));
+            ltau = norminv((voi_params(vidx, 1) - gen_grid.tau(1)) ./ (gen_grid.tau(2) - gen_grid.tau(1)));
             leta = norminv((voi_params(vidx, 2) - gen_grid.eta(1)) ./ (gen_grid.eta(2) - gen_grid.eta(1)));
             % we overwrite values accordingly in the prior structure:
-            tmpPE.lmu_alpha = lalpha;
+            tmpPE.lmu_tau = ltau;
             tmpPE.lmu_eta = leta;
-            tmpPE.lsigma_alpha =  norminv(exp(-5) ./ 2); % Sigma is bounded in our case between 0 and -2 
+            tmpPE.lsigma_tau =  norminv(exp(-5) ./ 2); % Sigma is bounded in our case between 0 and -2 
             tmpPE.lsigma_eta =  norminv(exp(-5) ./ 2); % 
             disp(cpm_get_true_parameters(tmpPE, tmpPRF.M, tmpPRF.U))
             [tmpy, stat] =  spm_prf_response(tmpPE, tmpPRF.M, tmpPRF.U);
@@ -194,7 +194,7 @@ end
 outpath='simulationfiles';  % PRF file path
 % Now we generate / precompute the recovery grid:
 grid = [];
-grid.alpha = [alpha_support, recovery_grid_resolution];
+grid.tau = [tau_support, recovery_grid_resolution];
 grid.eta = [eta_support, recovery_grid_resolution];
 
 U_recovery = cpm_precompute(model, grid, fixedparams, data, 'simulationfiles/U_recovery', REDO);
@@ -215,9 +215,9 @@ else
 end
 
 %% ===================== VISUALIZATION OF RECOVERED PARAMS
-nlevel = 0.3;
+nlevel = 0.0;
 visualize_idx =  1 + (nparams * (find(voi_noise == nlevel) - 1)) : nparams + (nparams * (find(voi_noise == nlevel) - 1));
-fig1 = visualize_recovery(PRFn, visualize_idx, voi_params, 4, true, 40, {'alpha', 'eta'}, 1000);
+fig1 = visualize_recovery(PRFn, visualize_idx, voi_params, 4, true, 40, {'tau', 'eta'}, 100);
 sgtitle(sprintf('Parameter recovery with noise %4.2f', nlevel))
 %
 print(fig1, sprintf('results/parameter_recovery_noise_%4.2f_%s.png', nlevel, DATA_GENERATION), '-dpng', '-r600');
@@ -263,7 +263,7 @@ end
 %% Model Comparison for nullmodel:
 [logBF, exceedenceP, comparisons] = deal({}, {}, {});
 % Param idx which generated 0 models:
-nullidx = find(voi_params(:, 1) == 0 & voi_params(:, 2) == 0);
+nullidx = find(voi_params(:, 1) == cpm_logit(eps) & voi_params(:, 2) == 0);
 % small trick to expand initial index to noise 
 null_voxels =  repmat(nullidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
 [logBF{1}, exceedenceP{1}, comparisons{1}]  = cpm_model_comparison(reducedF, null_voxels, 1);
@@ -276,13 +276,13 @@ nou_voxels =  repmat(noutilityidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
 
 % Model comparisons for no learning model:
 % Param idx for no-learning - including no utility, i.e. 0 model is included
-nolearningidx =  find(voi_params(:, 1) == 0);
+nolearningidx =  find(voi_params(:, 1) == cpm_logit(eps));
 nol_voxels =  repmat(nolearningidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
 [logBF{3}, exceedenceP{3}, comparisons{3}]  = cpm_model_comparison(reducedF, nol_voxels, 3);
 
 % Model comparisons for full model:
 % Param idx for full models excluding all 0 models
-fullidx = find(voi_params(:, 1) ~= 0 & voi_params(:, 2) ~= 0);
+fullidx = find(voi_params(:, 1) ~= cpm_logit(eps) & voi_params(:, 2) ~= 0);
 full_voxels =  repmat(fullidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
 [logBF{4}, exceedenceP{4}, comparisons{4}]  = cpm_model_comparison(reducedF, full_voxels, 4);
 
@@ -357,7 +357,7 @@ end
  %%  RMSE (Euclidean distance)
 rmse = squeeze(sqrt(mean((true_params - rec_params).^2, 2)));
 fig3 = figure('Color', 'none', 'Units', 'pixels', 'Position', [0, 0, 1600, 1200]);
-param_names =  {'\mu_\alpha', '\mu_\eta', '\sigma_\alpha', '\sigma_\eta', '\beta', 'transit', 'decay', '\epsilon'};
+param_names =  {'\mu_\tau', '\mu_\eta', '\sigma_\tau', '\sigma_\eta', '\beta', 'transit', 'decay', '\epsilon'};
 noise_names =strsplit(num2str(voi_noise));
 
 heatmap(param_names, noise_names, rmse');

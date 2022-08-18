@@ -193,16 +193,11 @@ end
 %% ===================== MODEL INVERSION ======================
 outpath='simulationfiles';  % PRF file path
 % Now we generate / precompute the recovery grid:
-grids = [];
-grids{1}.alpha = [alpha_support, recovery_grid_resolution];
-grids{1}.eta = [eta_support, recovery_grid_resolution];
-grids{2}.alpha = [alpha_support, recovery_grid_resolution];
-grids{3}.eta = [eta_support, recovery_grid_resolution];
+grid = [];
+grid.alpha = [alpha_support, recovery_grid_resolution];
+grid.eta = [eta_support, recovery_grid_resolution];
 
-PRFns ={};
-
-for gr = 1 : 3
-U_recovery = cpm_precompute(model, grids{gr}, fixedparams, data, ['simulationfiles/U_recovery_' num2str(gr)], REDO);
+U_recovery = cpm_precompute(model, grid, fixedparams, data, 'simulationfiles/U_recovery', REDO);
 
 % And specify the PRF for recovery:
 PRF = cpm_specify(SPM, options, VOI.xY.y, VOI.xY.XYZmm, ...
@@ -211,21 +206,18 @@ PRF = cpm_specify(SPM, options, VOI.xY.y, VOI.xY.XYZmm, ...
 voxels = []; % or select subset of voxels of interest
 PRF.M.noprint = 0; % to suppress spm outputs
 
-    if ~exist('simulationfiles/PRFn.mat', 'file') || REDO
-        PRFn = cpm_estimate(PRF, voxels, use_par);
-        save(['simulationfiles/PRFn_' num2str(gr) '.mat'], 'PRFn'),
-        PRFns{gr} = PRFn;
-    else
-        PRFn = load(['simulationfiles/PRFn_' num2str(gr) '.mat']);
-        PRFn = PRFn.PRFn;
-        PRFns{gr} = PRFn;
-    end
-
+if ~exist('simulationfiles/PRFn.mat', 'file') || REDO
+    PRFn = cpm_estimate(PRF, voxels, use_par);
+    save('simulationfiles/PRFn.mat', 'PRFn'),
+else
+    PRFn = load('simulationfiles/PRFn.mat');
+    PRFn = PRFn.PRFn;
 end
+
 %% ===================== VISUALIZATION OF RECOVERED PARAMS
-nlevel = 0.15;
+nlevel = 0.1;
 visualize_idx =  1 + (nparams * (find(voi_noise == nlevel) - 1)) : nparams + (nparams * (find(voi_noise == nlevel) - 1));
-fig1 = visualize_recovery(PRFns{1}, visualize_idx, voi_params, 4, true, 40, {'alpha', 'eta'}, 500);
+fig1 = visualize_recovery(PRFn, visualize_idx, voi_params, 4, true, 40, {'alpha', 'eta'}, 500);
 sgtitle(sprintf('Parameter recovery - Gaussian noise with SD %4.2f', nlevel))
 
 cpm_savefig(fig1,  sprintf('results/parameter_recovery_noise_%4.2f_%s.pdf', nlevel, DATA_GENERATION))
@@ -242,29 +234,42 @@ cpm_savefig(fig1,  sprintf('results/parameter_recovery_noise_%4.2f_%s.pdf', nlev
 % quite some issues with it. We shold discuss this!!! 
 reducedF = zeros(4, nvoxels);
 
-reducedF(4, :) = PRFns{1}.F;
-reducedF(3, :) = PRFns{2}.F;
-reducedF(2, :) = PRFns{3}.F;
-
-
-reduced_sigma = -5.5;
-rc_sigma =0;
+reduced_sigma = -4; 2.5; %4;
+rc_sigma = 1; %0.5;
+reduced_alpha = -4;
 
 for vidx = 1 : nvoxels
-        pE = PRFns{3}.M.pE{vidx};
-        pC = PRFns{3}.M.pC{vidx};
+        pE = PRFn.M.pE{vidx};
+        pC = PRFn.M.pC{vidx};
         % Null model 
         % FIXME : I have huge issues with this - this is how we have coded it
         % so far afaik.
         rE0 = spm_vec(pE); 
         rC0 = spm_vec(pC);
+        rE0([1]) =  reduced_alpha;  % setting all parameters of interest to small values except for lmu_eta, as 0 = no utility modulation
+        rE0([3, 4]) = reduced_sigma; 
+        rC0([1, 2]) = 0; % Allowing no covariance.
+         rC0([3, 4]) = rc_sigma; % Allowing no covariance.
+        reducedF(1, vidx) = cpm_model_reduction(PRFn, vidx, rE0, rC0) + PRFn.F(vidx);
         % learning no utility:
-        rC0([1]) = 0; % Allowing no covariance.
-        rC0([2]) = rc_sigma; % Allowing no covariance.
-        rE0([2]) = reduced_sigma; 
+        rE10 = spm_vec(pE); 
+        rC10 = spm_vec(pC);
+        rC10([2]) = 0; % Allowing no covariance.
+        rC10([4]) = rc_sigma; % Allowing no covariance.
+        rE10([4]) = reduced_sigma; 
 
-        reducedF(1, vidx) = cpm_model_reduction(PRFn, vidx, rE0, rC0)  + PRFn.F(vidx);
+        reducedF(2, vidx) = cpm_model_reduction(PRFn, vidx, rE10, rC10)  + PRFn.F(vidx);
+        % no learning utility
+        rE01 = spm_vec(pE); 
+        rC01 = spm_vec(pC);
+        rE01([1]) = reduced_alpha;   
+         rE01([3]) =reduced_sigma; 
 
+        rC01([1]) = 0; % Allowing no covariance
+        rC01([3]) = rc_sigma; % Allowing no covariance
+        reducedF(3, vidx) = cpm_model_reduction(PRFn, vidx, rE01, rC01) + PRFn.F(vidx);
+        % Storing full model
+        reducedF(4, vidx) =  PRFn.F(vidx);
 end
 %
 % Model Comparison for nullmodel:
@@ -332,7 +337,7 @@ for ii = 1  : 4
 end
 sgtitle( 'Model Comparisons')
 
-%cpm_savefig(fig2, sprintf('results/model_recovery_%s.pdf', DATA_GENERATION))
+cpm_savefig(fig2, sprintf('results/model_recovery_%s.pdf', DATA_GENERATION))
 
 %% Parameter recovery statistics
 % it gets a bit messy here
@@ -361,7 +366,7 @@ end
  true_params = reshape(true_params, 8, [], nnoise);
  rec_params = reshape(rec_params, 8, [], nnoise);
 
- %%  RMSE (Euclidean distance)
+ %  RMSE (Euclidean distance)
 rmse = squeeze(sqrt(mean((true_params - rec_params).^2, 2)));
 fig3 = figure('Color', 'none', 'Units', 'pixels', 'Position', [0, 0, 1800, 1600]);
 param_names =  {'\mu_\alpha', '\mu_\eta', '\sigma_\alpha', '\sigma_\eta', '\beta', 'transit', 'decay', '\epsilon'};
