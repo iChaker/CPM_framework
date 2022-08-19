@@ -387,7 +387,7 @@ cpm_savefig(fig3, sprintf('results/parameter_distance_noise_%4.2f_%s.pdf', nleve
 % of length nparams, because they are not influence by noise.
 % y_pred = [];
 % z_pred = [];
-% 
+% js
 % for vidx = 1 : nvoxels
 %     % genrating predictions
 %     [tmpy, tmpz] = spm_prf_response(PRFn.Ep{vidx}, PRFn.M, PRFn.U);
