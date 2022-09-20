@@ -88,10 +88,6 @@ if nargin < 4
     % U.nbins field is injected automatially by spm_prf_analyse
     nbins = max(U(1).nbins, max(U(end).ind));
 
-    
-    
-    
-    
     coords = U(1).gridpoints;
     W = get_response(P,M,U,coords);
     
