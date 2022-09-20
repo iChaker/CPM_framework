@@ -48,9 +48,13 @@ for i=1:length(p_names)
        L_names{cc} = VL_latent;
        cc = cc + 1;
    end
-   minp = U(1).grid.(p_names{i})(1);
-   maxp = U(1).grid.(p_names{i})(2);
-   true_moments = fn_true_moments(latent_moments,minp,maxp);
+   minp = M.cpm.mu.(p_names{i})(1);
+   maxp = M.cpm.mu.(p_names{i})(2);
+   
+   mins = M.cpm.sigma.(p_names{i})(1);
+   maxs = M.cpm.sigma.(p_names{i})(2);
+   
+   true_moments = fn_true_moments(latent_moments,minp,maxp, mins, maxs);
    tm_names = fieldnames( true_moments );
    for j=1:length(tm_names)
        VL_true = [ tm_names{j} '_' p_names{i} ];
