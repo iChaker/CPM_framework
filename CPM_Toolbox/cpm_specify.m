@@ -37,10 +37,21 @@ VOI.Y=y; % no eigen summary method
 VOI.xY=xY;
 
 % priors -------------------------------------------------
+if ~isfield(options, 'mu')
+    warning("Assuming that maximal parameter values (grid) are equal to probable paramter space (mu).")
+    p_names = fieldnames(U(1).grid);
+    for ii = 1 : length(p_names)
+        options.mu.(p_names{ii}) = [U(1).grid.(p_names{ii})(1), U(1).grid.(p_names{ii})(2)];
+    end
 
-if isempty(options.mu)
-    error("Need to define the length of  mu")
+elseif isfield(options, 'mu')
+    
+    if length(fieldnames(options.mu)) ~= length(fieldnames(U(1).grid))
+        error("Check for not fullyspecified mu options not yet implemented")
+    end
+    
 end
+
 
 if isempty(population_field)
     population_field='cpm_RF_Gaussian';
@@ -62,8 +73,16 @@ for pidx = 1 : length(p_names)
     
     r = (grid_mu(2) - grid_mu(1)) / grid_mu(3);
     sigma_min = r / 2;
-    sigma_max = (grid_mu(2) - model_mu(2)) / 2;
-      
+    
+    if ~ (grid_mu(2) == model_mu(2))
+        sigma_max = (grid_mu(2) - model_mu(2)) / 2;
+    
+    else
+
+        warning("Possible parameter space for mu spans entire grid, setting sigma_max to half the grid space")
+        sigma_max = (grid_mu(2) - grid_mu(1))  / 2;        
+    end
+
     if sigma_min >= sigma_max
         warning('Sigma_min is smaller than sigma_max, try to increase grid resolution. Reversing order')
         [sigma_min, sigma_max] = deal(sigma_max, sigma_min);
