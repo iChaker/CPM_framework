@@ -1,4 +1,4 @@
-function [ fn_RF_weights, fn_true_moments,fn_true_scaling, fn_latent_moment_priors,fn_scaling_priors,fn_latent_moments,fn_latent_scaling  ] = cpm_RF_Gaussian(varargin)
+function [ fn_RF_weights, fn_true_moments,fn_true_scaling, fn_latent_moment_priors,fn_scaling_priors,fn_latent_moments,fn_latent_scaling  ] = cpm_RF_Gaussian_non(varargin)
 %cpm_RF_Gaussian One Gaussians as population field
 fn_RF_weights=@get_RF_weights;
 fn_true_moments=@get_true_moments;
@@ -16,25 +16,21 @@ mu = true_parameters.mu;
 sigma = true_parameters.sigma;
 beta = true_parameters.beta;
 
-sigma = sigma .* sigma;
+V = diag(sigma).^2;
+x = spm_mvNpdf(coords, mu, V) * sqrt(((2*pi)^3)*det(V));
+xx = 1 / sum(x);
 
-V = diag(sigma);
-x = spm_mvNpdf(coords, mu, V) ; %* sqrt(((2*pi)^3)*det(V));
-
-%xx = 1 / sum(x) * sqrt(((2*pi)^3)*det(V));
-
-x = x ./ sum(x + eps);
-
-if ~isfinite(sum(x))
+if ~isfinite(xx)
     warnstring =[];
     for sig = sigma
         warnstring = [warnstring sprintf(' %4.5f', sig)];
-    end    
+    end
+    
     warning([ 'spm_mvNpdf sums to 0 with sigmas =', warnstring])
 end
 
 % Scale
-W = beta .* x;
+W =  beta .* x ; %.* xx;
 end
 %% Priors
 function [pE,pC] = get_latent_moment_priors()
@@ -54,15 +50,15 @@ function [pE,pC] = get_latent_scaling_priors()
 end
 
 %% true transforms
-function true_moments = get_true_moments(latent_moments, minp, maxp, mins, maxs)
+function true_moments = get_true_moments(latent_moments, minp, maxp)
 % 
 
 lmu = latent_moments.lmu;
 lsigma = latent_moments.lsigma;
 
 % THESE SHOULD BE HYPERPARAMETERS
-SIGMA_MIN = mins;
-SIGMA_MAX = maxs;
+SIGMA_MIN = 0.001;
+SIGMA_MAX = 2;
 
 mu = ((maxp-minp) .* spm_Ncdf(lmu,0,1)) + minp ;
 sigma= ((SIGMA_MAX-SIGMA_MIN) .* spm_Ncdf(lsigma,0,1)) + SIGMA_MIN ;
