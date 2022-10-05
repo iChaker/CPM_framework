@@ -52,12 +52,11 @@ elseif isfield(options, 'mu')
     
 end
 
-
 if isempty(population_field)
     population_field='cpm_RF_Gaussian';
 end
 
-[~,~,~,fn_lmoment_priors,fn_lscaling_priors] =  feval(population_field);
+[~, ~, ~, fn_lmoment_priors, fn_lscaling_priors] =  feval(population_field);
 [mpE,mpC] = fn_lmoment_priors();
 [spE,spC] = fn_lscaling_priors();
 pE = struct();
@@ -67,47 +66,13 @@ m_names = fieldnames(mpE);
 s_names = fieldnames(spE);
 
 for pidx = 1 : length(p_names)
-    
     model_mu = options.mu.(p_names{pidx});
     grid_mu  = U(1).grid.(p_names{pidx});
     
-    r = (grid_mu(2) - grid_mu(1)) / grid_mu(3);
-    sigma_min = r / 2;
-    
-    if ~ (grid_mu(2) == model_mu(2))
-        sigma_max = (grid_mu(2) - model_mu(2)) / 2;
-    
-    else
-
-        warning("Possible parameter space for mu spans entire grid, setting sigma_max to half the grid space")
-        sigma_max = (grid_mu(2) - grid_mu(1))  / 2;        
-    end
-
-    if sigma_min >= sigma_max
-        warning('Sigma_min is smaller than sigma_max, try to increase grid resolution. Reversing order')
-        [sigma_min, sigma_max] = deal(sigma_max, sigma_min);
-    end
- 
+    [sigma_min, sigma_max,  latent_prior_sigma] = define_sigma(grid_mu, model_mu);
+   
     options.sigma.(p_names{pidx}) = [sigma_min, sigma_max];
-    
-    prior_sigma = ( ((model_mu(2) - model_mu(1)) / 2) * 0.975) / 2;
-    
-    prior_sigma_latent =  norminv( (prior_sigma - sigma_min) ./ (sigma_max - sigma_min));
-    
-     if ~isfinite(prior_sigma_latent)
-         warning('Setting latent prior over sigma to 0, the grid has to be twice as large to cover a 95 % prior over mu. Trying prior to cover 95 % of  grid.')
-         prior_sigma = ( ((grid_mu(2) - grid_mu(1)) / 2) * 0.975) / 2;
-         prior_sigma_latent = norminv( (prior_sigma - sigma_min) ./ (sigma_max - sigma_min));
-         
-        if ~isfinite(prior_sigma_latent)
-            warning('Still not possible find to finite prior over sigma, setting latent_prior to 0. ')
-            prior_sigma_latent = 0;
-        end
- 
-     end
-     
-     options.lsigma_pE.(p_names{pidx}) = prior_sigma_latent;
-     
+    options.lsigma_pE.(p_names{pidx}) = latent_prior_sigma;
 end
      
 
@@ -160,3 +125,55 @@ PRF  = spm_prf_analyse('specify',SPM,VOI,U,options);
 
 end
 
+
+function [sigma_min, sigma_max, prior_sigma_latent] = define_sigma(grid_mu, model_mu)
+    % Grid_mu = Grid over parameters (e.g. U(1).grid.eta = [-1, 1, 10]
+    % Model_mu = Reasonable parameter space.
+    
+    % Find r the minimal radius given the resolution of the grid over P (e.g.
+    % covering 95 % of the space around the space.
+    
+    % Rewriting variables for understanding:
+    grid_min = grid_mu(1);
+    grid_max = grid_mu(2);
+    grid_n = grid_mu(3);
+    
+    mu_min = model_mu(1);
+    mu_max = model_mu(2);
+    
+    % Check if symmetric:
+    grid_dist = grid_max - grid_min;
+    mu_dist = mu_max - mu_min;
+    
+    if abs((grid_max - grid_dist / 2) - (mu_max - mu_dist / 2)) > 1e-10
+        warning('Currently only defined under the assumption of symmetric parameter spaces')
+    end
+    
+    r = grid_dist / grid_n;
+    sigma_min = r / 2;
+    
+    % Optimal parameter space:  Sigma max is defined as the distance from mu to
+    % P and is large enough to cover the mu space with 95 % probability. If not
+    % using an sub-optimal definition of sigma max. 
+    % Sigma_max = P_max - Mu_max
+    
+   if (grid_max - mu_max) >= (mu_dist / 2)
+        sigma_max = (grid_max - mu_max)  / 2;
+  
+   else
+       sigma_max = mu_dist / 4;
+       warning("Distance between mu and P not large enough, setting sigma_max to span 95 % of mu.")
+   end
+
+    if sigma_min > sigma_max
+        error('Sigma_min is smaller than sigma_max, try to increase grid resolution.')
+    end
+ 
+    prior_sigma = (mu_dist / 4) - eps; % numerical stability
+    prior_sigma_latent =  norminv( (prior_sigma - sigma_min) ./ (sigma_max - sigma_min));
+    
+    if ~isfinite(prior_sigma_latent)
+        warning('Prior over sigma is nonfinite, setting latent_prior to 0. ')
+        prior_sigma_latent = 0;
+    end
+end

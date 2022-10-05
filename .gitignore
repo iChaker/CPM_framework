@@ -1,0 +1,4 @@
+simulationfiles/
+results/
+tmpfiles/
+*.m~
