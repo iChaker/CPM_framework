@@ -1,11 +1,25 @@
+function plot_single_voxel(PRF, idx, plot_names, transformers, transform_names, num_samples, posterior)
+
+arguments
+    PRF
+    idx = 1
+    plot_names = {'tau', 'eta'}
+    transformers = {@cpm_logit_inv, []}
+    transform_names = {'alpha', 'eta'}
+    num_samples = 100
+    posterior = true
+end
 
 
-Ep = PRF.Ep{1};
+Ep = PRF.Ep{idx};
 
-plot_names = {'eta', 'tau'};
-
-transformers = {@cpm_logit_inv, []};
-transform_names = {'alpha', []};
+for ii = 1 : length(transformers)
+    if isempty(transformers{ii})
+        transformers{ii} = @(x) x;
+        transform_names{ii} = plot_names{ii};
+    end
+        
+end
 
 if length(plot_names) > 2
     error("Not implemented!")
@@ -38,11 +52,11 @@ xyz = {};
 XYZ = [];
 
 for ii = 1 : length(param_names)
-XYZ = [XYZ, xyz{ii}(:)];
+    XYZ = [XYZ, xyz{ii}(:)];
 end
 
 %%
-[~, z] = cpm_prf_get_ppd(PRF, XYZ, 1, 100, true);
+[~, z] = cpm_prf_get_ppd(PRF, XYZ, idx, num_samples, posterior);
 
 z = reshape(z, resolution{:});
 
@@ -53,12 +67,15 @@ for cc = 1 : length(plot_names)
 end
 
 zdims = 1 : length(param_names);
+
 zp = permute(z, [plt_idx, zdims(~ismember(zdims, plt_idx))]);
 
 param_names = param_names( [plt_idx, zdims(~ismember(zdims, plt_idx))]);
+% transform_names = transform_names( [plt_idx, zdims(~ismember(zdims, plt_idx))]);
+% transformers = transformers( [plt_idx, zdims(~ismember(zdims, plt_idx))]);
 
-true_ep = cpm_get_true_parameters(PRF, 1);
-true_pe = cpm_get_true_parameters(PRF.M.pE{1}, PRF.M, PRF.U);
+true_ep = cpm_get_true_parameters(PRF, idx);
+% true_pe = cpm_get_true_parameters(PRF.M.pE{idx}, PRF.M, PRF.U);
 % A is given, up to 8 dims here.
 
 cols = repmat({':'},1,ndims(zp));
@@ -70,21 +87,28 @@ end
 
 zp_slc = zp(cols{:});
 
-figure;
-
 if length(plot_names) == 1
     plot(zp_slc)
 else
     
         hold on
-        rec_pos = [0 - diff(pmus.(plot_names{1})) / 2, 0 - diff(pmus.(plot_names{2})) / 2, ...
-                            diff(pmus.(plot_names{1})) , diff(pmus.(plot_names{2}))];
-
-        imagesc(griddim.(plot_names{1}), griddim.(plot_names{2}), zp_slc)
-
-        contour(griddim.(plot_names{1}), griddim.(plot_names{2}), zp_slc)
-       
-        rectangle('Position', rec_pos, 'EdgeColor','white', 'LineWidth', 2, 'LineStyle', '-');
+        
+        pmus.(plot_names{1}) = transformers{1}(pmus.(plot_names{1}));
+        pmus.(plot_names{2}) = transformers{2}(pmus.(plot_names{2}));
+        
+        rec_pos = [sum(pmus.(plot_names{1})) / 2 - diff(pmus.(plot_names{1})) / 2, ...
+                          sum(pmus.(plot_names{2})) / 2 - diff(pmus.(plot_names{2})) / 2, ...
+                            diff(pmus.(plot_names{1})) , ...
+                            diff(pmus.(plot_names{2}))];
+        
+%         rec_pos(1 : 2 : end) = transformers{1}(rec_pos(1:2:end));
+%         rec_pos(2 : 2 : end) = transformers{2}(rec_pos(2:2:end));
+        
+        pplot = pcolor(transformers{1}(griddim.(plot_names{1})), transformers{2}(griddim.(plot_names{2})), zp_slc);
+        %contour(transformers{1}(griddim.(plot_names{1})), transformers{2}(griddim.(plot_names{2})), zp_slc)
+        pplot.LineWidth = 0.5;
+        pplot.FaceColor = 'interp';
+        rectangle('Position', rec_pos, 'EdgeColor','white', 'LineWidth', 1, 'LineStyle', '--');
 
         t = -pi:0.01:pi;
 %         x_min = true_pe.(['mu_' plot_names{1}]) +  2 * psigs.(plot_names{1})(1) * cos(t);
@@ -97,15 +121,19 @@ else
 %         plot(x_max, y_max)
 %         plot(x_prior, y_prior)
     
-        x_post = true_ep.(['mu_' plot_names{1}]) + 2 *  true_ep.(['sigma_' plot_names{1}]) * cos(t);
-        y_post = true_ep.(['mu_' plot_names{2}]) +  2 *  true_ep.(['sigma_' plot_names{2}]) * sin(t);
-        
-        plot(x_post, y_post, 'white', 'LineWidth', 2, 'LineStyle', '--')
+%         x_post = true_ep.(['mu_' plot_names{1}]) + 2 *  true_ep.(['sigma_' plot_names{1}]) * cos(t);
+%         y_post = true_ep.(['mu_' plot_names{2}]) +  2 *  true_ep.(['sigma_' plot_names{2}]) * sin(t);
+%         
+%         x_post = transformers{1}(x_post);
+%         y_post = transformers{2}(y_post);
+       %plot(x_post, y_post, 'white', 'LineWidth', 2, 'LineStyle', '--')
         
 
     pbaspect([1 1 1])
     %daspect([1 1 1])
     set(gca, 'LooseInset', get(gca,'TightInset'))
+end
+
 end
 
 

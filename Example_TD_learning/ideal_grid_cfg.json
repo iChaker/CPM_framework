@@ -1,5 +1,6 @@
 {
  "param_names": ["tau", "eta"], 
+ "point_names": ["alpha", "eta"],
   "p_resolution": 21,
   "rec_resolution": 21,
   "p_grid_tau": [-8.1259, 8.1259],
@@ -14,6 +15,8 @@
   "sim_sigma_eta": [-8.1259],
   "sim_mu_tau": [-4.0],
   "sim_mu_eta": [-1.0],
+  "point_alpha" : [0, 0.3, 0.6, 1.0],
+  "point_eta" : [-1, 0, 1],
   "sim_noise": [0],
   "tmpdir": "tmpfiles",
   "simulationdir": "simulationfiles",

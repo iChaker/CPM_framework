@@ -1,4 +1,4 @@
-function [PRFname, PRFn] = simulate_data(cfg_file, REDO, use_par)
+function [PRFname, PRF] = cpm_simulate_data(cfg_file, REDO, use_par)
 
 arguments
     cfg_file = 'ideal_grid_cfg.json'
@@ -58,8 +58,9 @@ rec_options.name = 'recovery';
 
 mu_simulations = {};
 sigma_simulations ={};
+point_simulations = {};
 
-
+pc = 1;
 for pn = cfg.param_names(:)'
     p_grid.(pn{1}) = [cfg.(['p_grid_' pn{1}])(:)', cfg.p_resolution];
     rec_grid.(pn{1}) = [cfg.(['rec_grid_' pn{1}])(:)', cfg.rec_resolution];
@@ -75,25 +76,55 @@ for pn = cfg.param_names(:)'
     catch
         disp("Mu boundaries not defined for recovery.")
     end
-
     mu_simulations{end + 1, 1} = cfg.(['sim_mu_' pn{1}])(:);
     sigma_simulations{end + 1, 1} = cfg.(['sim_sigma_' pn{1}])(:);
+    point_simulations{end + 1, 1} = cfg.(['point_mu_' cfg.point_names{pc}])(:);
+    pc = pc + 1;
+end
+
+pointParams = {};
+point_mus = cell(length(point_simulations), 1);
+[point_mus{:}] = ndgrid(point_simulations{:});
+
+nvoxels = length(point_mus);
+
+pc = 1;
+for  pn = cfg.point_names(:)'
+    tmp_mu = point_mus{pc};
+    for ii = 1 : length(tmp_mu(:))
+        pointParams{ii}.([pn{1}]) = tmp_mu(ii);
+    end
+    pc = pc + 1;
+end
+
+dimParams = {};
+for  pn = cfg.param_names(:)'
+    [tmp_mu, tmp_sig] = ndgrid(cfg.(['sim_mu_' pn{1}])(:), cfg.(['sim_sigma_' pn{1}])(:));
+    nvoxels = nvoxels + length(tmp_mu(:));
+    tmp_mu = tmp_mu(:);
+    tmp_sig = tmp_sig(:);
+    for ii = 1 : length(tmp_mu)
+        dimParams.(pn{1}){ii}.(['mu_' pn{1}]) = tmp_mu(ii);
+        dimParams.(pn{1}){ii}.(['sigma_' pn{1}]) = tmp_sig(ii);
+    end
 end
 
 % The resolution of the different grids, generation grid will only be used when
 mu_grid = cell(nnames, 1);
-[mu_grid{1 : nnames}] = ndgrid(mu_simulations{:});
-
 sigma_grid  = cell(nnames, 1);
-[sigma_grid{1:  nnames}] = ndgrid(sigma_simulations{:});
+[mu_grid{1 : nnames}, sigma_grid{1:  nnames}] = ndgrid(mu_simulations{:}, sigma_simulations{:});
 
+nvoxels = nvoxels  + length(mu_grid{1}(:));
+
+fullParams = {};
 for np = 1 : nnames
-    mu_grid{np} = mu_grid{np}(:);
-    sigma_grid{np} = sigma_grid{np}(:); 
+    tmp_mu = mu_grid{np}(:);
+    tmp_sig = sigma_grid{np}(:);
+        for ii = 1 : length(tmp_mu(:))
+            fullParams{ii}.(['mu_' cfg.param_names{np}]) = tmp_mu(ii);
+            fullParams{ii}.(['sigma_' cfg.param_names{np}]) = tmp_sig(ii);
+        end
 end
-
-nparams = length(mu_grid{1});
-nstandard = length(sigma_grid{1});
 
 %% =============== SIMULATING DATA ===============
 % Preparing behavioural data for the simulation:
@@ -129,85 +160,69 @@ fixedparams.Lambda=1.0;
 
 % The number of voxels is hte number of combinations and the number of noise
 % levels:
-nvoxels = nparams * nstandard * nnoise;
-% Pre allocating:
-y = zeros(nscans, nvoxels);
-states = [];
-% The voxel location is meaningless in our simulation, 
-% but we used it to store noise level and indexes in the parameter space
-xyz = zeros(3, nvoxels); 
-xyz_def = cell(3, nvoxels);
+
+y = zeros(nscans, nvoxels * nnoise);
+xyz = zeros(3, nvoxels * nnoise); 
+xyz_def = cell(nvoxels, 1);
+
+nv = 1;
+mv = 1;
+
+for pidx = 1 : length(pointParams)
+    y(:, nv) =  cpm_generative_point_process(pointParams{pidx}, model, fixedparams, data, TR, nscans, tmpdir, simulationname);
+    xyz(1, nv) = mv;
+    xyz_def{nv} = pointParams{pidx};
+    nv = nv + 1; 
+end
+
+
+for pn = cfg.param_names(:)'
+    mv = mv + 1;
+    part_p_grid = {};
+    part_options = options;
+    part_options.mu = {};
+    part_options.mu.(pn{1}) = options.mu.(pn{1});
+    part_p_grid.(pn{1}) = p_grid.(pn{1});
+    U_part = cpm_precompute(model, part_p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_' pn{1}  '_grid.mat']), true);
+    for pidx = 1 : length(dimParams.(pn{1}))
+        y(:, nv) = cpm_generative_grid_process(dimParams.(pn{1}){pidx}, SPM, U_part, nscans, part_options, tmpdir);
+        xyz(1, nv) = mv;
+        xyz_def{nv} = dimParams.(pn{1}){pidx};
+        nv = nv + 1;
+    end
+end
+
+U_full = cpm_precompute(model, p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_full_grid.mat']), true);
+
+mv = mv + 1;
+for pidx = 1 : length(fullParams)
+    y(:, nv) = cpm_generative_grid_process(fullParams{pidx}, SPM, U_full, nscans, options, tmpdir);
+    xyz(1, nv) = mv;
+    xyz_def{nv} =fullParams{pidx};
+    nv = nv + 1;
+end
+
+
+for nidx = 1 : nnoise
+    
+    for vidx =  1 : nvoxels
+        new_idx = vidx + nvoxels * (nidx - 1);
+    % normrand with 0 variance returns the distributions mean:
+        y(:, new_idx) = y(:, vidx) +  normrnd(0, cfg.sim_noise(nidx), [nscans,1]);
+        xyz(1,  new_idx) = xyz(1, vidx);
+        xyz(2,  new_idx) = nidx;
+    end
+end
 
 %% 
-if ~ exist(fullfile(simulationdir, [simulationname, '_simVOI.mat']), 'file') || REDO
+% Storing and saving the VOI in SPM format:
+VOI.xY.y = y;
+VOI.xY.XYZmm = xyz;
+VOI.xyz_def = xyz_def;
+% Mean values for completeness
+VOI.y = mean(y, 2); % for completeness
+save(fullfile(simulationdir, [simulationname, '_simVOI.mat']), 'VOI')
 
-    cc = 1;
-    for sidx = 1 :  nstandard
-        for vidx = 1 :  nparams
-            % For safety clearing previously set values
-            grid = [];
-            U_voi = [];
-            % BOLD generation block:
-            % in the grid generation we use a grid over a number of points and
-            % generat the BOLD response over the grid using the generative
-            % process described by the CPM model
-            if REDO && cc == 1 % the Grid needs to be oncly created once, so here we load it or recreat it if necessary
-                U_voi = cpm_precompute(model, p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_grid.mat']), true);
-            else
-                 U_voi = cpm_precompute(model, p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_grid.mat']), false);
-            end
-            % We generate a temporary PRF file, to generate prior values and some additional options:
-           tmpPRF = cpm_specify(SPM, options, zeros(nscans, 1), ...
-                                                  zeros(3, 1), U_voi, 'cpm_RF_Gaussian', 'cpm_obv_int', [tmpdir filesep]);
-            % We get the prior values of the latent(!!) parameters
-            tmpPE = tmpPRF.M.pE{1};
-            % As we define the to be simulated values in native space we have to
-            % transform them into the laten space:
-            
-            pc = 1;
-            for pn = cfg.param_names(:)'
-                tmpPE.(['lmu_' pn{1}]) = inverse_fun(mu_grid{pc}(vidx),  tmpPRF.options.cpm.mu.(pn{1})(1), ...
-                                                                                               tmpPRF.options.cpm.mu.(pn{1})(2));
-                tmpPE.(['lsigma_' pn{1}])  =sigma_grid{pc}(sidx); 
-                pc = pc + 1;
-            end
-            % we overwrite values accordingly in the prior structure:
-            disp(cpm_get_true_parameters(tmpPE, tmpPRF.M, tmpPRF.U))
-            [tmpy, stat] =  spm_prf_response(tmpPE, tmpPRF.M, tmpPRF.U);
-            % Saving hidden states of the model for later investigation
-            states = [states, stat.u];
-
-            % After having generated the BOLD signal we add simulated noise:
-            for nidx = 1 : nnoise
-                % normrand with 0 variance returns the distributions mean:
-                y(:, cc) = tmpy +  normrnd(0, cfg.sim_noise(nidx), [nscans,1]);
-                xyz(:, cc) = [vidx; sidx; nidx];
-                
-                mus = zeros(1, nnames);
-                sds = zeros(1, nnames);       
-                for xx = 1 : nnames
-                    mus(xx) = mu_grid{xx}(vidx);
-                    sds(xx) = sigma_grid{xx}(sidx);
-                end
-         
-                xyz_def(:, cc) = {mus; sds; cfg.sim_noise(nidx)};
-                cc = cc + 1;
-            end
-        end
-    
-    end
-    % Storing and saving the VOI in SPM format:
-    VOI.xY.y = y;
-    VOI.xY.XYZmm = xyz;
-    VOI.xyz_def = xyz_def;
-    % Mean values for completeness
-    VOI.y = mean(y, 2); % for completeness
-    save(fullfile(simulationdir, [simulationname, '_simVOI.mat']), 'VOI')
-
-else
-    VOI = load(fullfile(simulationdir, [simulationname '_simVOI.mat']));
-    VOI = VOI.VOI;
-end
 
 %% ===================== MODEL INVERSION ======================
 outpath=simulationdir;  % PRF file path
@@ -219,17 +234,9 @@ U_recovery = cpm_precompute(model, rec_grid, fixedparams, data, fullfile(simulat
 PRF = cpm_specify(SPM, options, VOI.xY.y, VOI.xY.XYZmm, ...
                    U_recovery, 'cpm_RF_Gaussian', 'cpm_obv_int', outpath);
 
-voxels = []; % or select subset of voxels of interest
 PRF.M.noprint = 0; % to suppress spm outputs
 PRFname = fullfile(simulationdir, [simulationname '_PRFn.mat']);
 
-
-if ~exist(PRFname, 'file') || REDO
-    PRFn = cpm_estimate(PRF, voxels, use_par);
-    save(PRFname, 'PRFn'),
-else
-    PRFn = load(PRFname);
-    PRFn = PRFn.PRFn;
-end
+save(PRFname, 'PRF'),
 
 end
