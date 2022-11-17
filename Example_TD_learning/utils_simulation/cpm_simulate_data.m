@@ -1,9 +1,7 @@
-function [PRFname, PRF] = cpm_simulate_data(cfg_file, REDO, use_par)
+function [VOI, voiname] = cpm_simulate_data(cfg_file)
 
 arguments
     cfg_file = 'ideal_grid_cfg.json'
-    REDO = true
-    use_par =true
 end
 
 
@@ -46,15 +44,12 @@ nnoise = length(cfg.sim_noise);
 nnames = length(cfg.param_names);
 
 p_grid = {};
-rec_grid = {};
 % These are hte options used by BayesPRF:
 options = {};
 options.name='simulation'; % PRF file tag
 options.TE=0.03;      % Echo time (you may add other options from BayespRF)
 options.model='spm_prf_response'; % We use a modified version of this function.
-%
-rec_options = options;
-rec_options.name = 'recovery';
+
 
 mu_simulations = {};
 sigma_simulations ={};
@@ -63,19 +58,13 @@ point_simulations = {};
 pc = 1;
 for pn = cfg.param_names(:)'
     p_grid.(pn{1}) = [cfg.(['p_grid_' pn{1}])(:)', cfg.p_resolution];
-    rec_grid.(pn{1}) = [cfg.(['rec_grid_' pn{1}])(:)', cfg.rec_resolution];
 
     try 
         options.mu.(pn{1}) = cfg.(['p_mu_' pn{1}])(:)';
     catch
         disp("Mu boundaries not defined for simulation.")
     end
-    
-    try
-        rec_options.mu.(pn{1}) = cfg.(['rec_mu_' pn{1}])(:)';
-    catch
-        disp("Mu boundaries not defined for recovery.")
-    end
+
     mu_simulations{end + 1, 1} = cfg.(['sim_mu_' pn{1}])(:);
     sigma_simulations{end + 1, 1} = cfg.(['sim_sigma_' pn{1}])(:);
     point_simulations{end + 1, 1} = cfg.(['point_mu_' cfg.point_names{pc}])(:);
@@ -156,7 +145,7 @@ end
 model = "cpm_grid_RPE"; % user defined model, see cpm_grid_template for details
 
 fixedparams.gamma=0.97;  % these fieldnames must be the same fieldnames used in the cpm_grid
-fixedparams.Lambda=1.0;
+fixedparams.lambda=1.0;
 
 % The number of voxels is hte number of combinations and the number of noise
 % levels:
@@ -176,21 +165,21 @@ for pidx = 1 : length(pointParams)
 end
 
 
-for pn = cfg.param_names(:)'
-    mv = mv + 1;
-    part_p_grid = {};
-    part_options = options;
-    part_options.mu = {};
-    part_options.mu.(pn{1}) = options.mu.(pn{1});
-    part_p_grid.(pn{1}) = p_grid.(pn{1});
-    U_part = cpm_precompute(model, part_p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_' pn{1}  '_grid.mat']), true);
-    for pidx = 1 : length(dimParams.(pn{1}))
-        y(:, nv) = cpm_generative_grid_process(dimParams.(pn{1}){pidx}, SPM, U_part, nscans, part_options, tmpdir);
-        xyz(1, nv) = mv;
-        xyz_def{nv} = dimParams.(pn{1}){pidx};
-        nv = nv + 1;
-    end
-end
+% for pn = cfg.param_names(:)'
+%     mv = mv + 1;
+%     part_p_grid = {};
+%     part_options = options;
+%     part_options.mu = {};
+%     part_options.mu.(pn{1}) = options.mu.(pn{1});
+%     part_p_grid.(pn{1}) = p_grid.(pn{1});
+%     U_part = cpm_precompute(model, part_p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_' pn{1}  '_grid.mat']), true);
+%     for pidx = 1 : length(dimParams.(pn{1}))
+%         y(:, nv) = cpm_generative_grid_process(dimParams.(pn{1}){pidx}, SPM, U_part, nscans, part_options, tmpdir);
+%         xyz(1, nv) = mv;
+%         xyz_def{nv} = dimParams.(pn{1}){pidx};
+%         nv = nv + 1;
+%     end
+% end
 
 U_full = cpm_precompute(model, p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_full_grid.mat']), true);
 
@@ -221,22 +210,8 @@ VOI.xY.XYZmm = xyz;
 VOI.xyz_def = xyz_def;
 % Mean values for completeness
 VOI.y = mean(y, 2); % for completeness
-save(fullfile(simulationdir, [simulationname, '_simVOI.mat']), 'VOI')
 
-
-%% ===================== MODEL INVERSION ======================
-outpath=simulationdir;  % PRF file path
-% Now we generate / precompute the recovery grid:
-
-U_recovery = cpm_precompute(model, rec_grid, fixedparams, data, fullfile(simulationdir, [simulationname '_U_recovery']), REDO);
-
-% And specify the PRF for recovery:
-PRF = cpm_specify(SPM, options, VOI.xY.y, VOI.xY.XYZmm, ...
-                   U_recovery, 'cpm_RF_Gaussian', 'cpm_obv_int', outpath);
-
-PRF.M.noprint = 0; % to suppress spm outputs
-PRFname = fullfile(simulationdir, [simulationname '_PRFn.mat']);
-
-save(PRFname, 'PRF'),
+voiname =  [simulationname, '_simVOI.mat'];
+save(fullfile(simulationdir, voiname), 'VOI')
 
 end
