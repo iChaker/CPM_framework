@@ -49,6 +49,11 @@ end
 
 xyz = {};
 [xyz{1 : length(param_names)}] = meshgrid(griddim_noname{:});
+
+if length(griddim_noname) < 2
+   xyz{1} =  xyz{1}(1, :);
+end
+    
 XYZ = [];
 
 for ii = 1 : length(param_names)
@@ -58,6 +63,9 @@ end
 %%
 [~, z] = cpm_prf_get_ppd(PRF, XYZ, idx, num_samples, posterior);
 
+if length(resolution) < 2
+    resolution{end + 1} = [];
+end
 z = reshape(z, resolution{:});
 
 plt_idx = nan(1, length(plot_names));
@@ -68,7 +76,11 @@ end
 
 zdims = 1 : length(param_names);
 
-zp = permute(z, [plt_idx, zdims(~ismember(zdims, plt_idx))]);
+if length(zdims) > 1
+    zp = permute(z, [plt_idx, zdims(~ismember(zdims, plt_idx))]);
+else 
+    zp = z;
+end
 
 param_names = param_names( [plt_idx, zdims(~ismember(zdims, plt_idx))]);
 % transform_names = transform_names( [plt_idx, zdims(~ismember(zdims, plt_idx))]);
@@ -93,6 +105,9 @@ else
     
         hold on
         
+        if length(zdims) < 2
+            zp_slc = zp_slc * zp_slc';
+        end
         pmus.(plot_names{1}) = transformers{1}(pmus.(plot_names{1}));
         pmus.(plot_names{2}) = transformers{2}(pmus.(plot_names{2}));
         

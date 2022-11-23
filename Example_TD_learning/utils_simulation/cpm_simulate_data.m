@@ -75,7 +75,7 @@ pointParams = {};
 point_mus = cell(length(point_simulations), 1);
 [point_mus{:}] = ndgrid(point_simulations{:});
 
-nvoxels = length(point_mus);
+nvoxels = length(point_mus{1}(:));
 
 pc = 1;
 for  pn = cfg.point_names(:)'
@@ -86,17 +86,6 @@ for  pn = cfg.point_names(:)'
     pc = pc + 1;
 end
 
-dimParams = {};
-for  pn = cfg.param_names(:)'
-    [tmp_mu, tmp_sig] = ndgrid(cfg.(['sim_mu_' pn{1}])(:), cfg.(['sim_sigma_' pn{1}])(:));
-    nvoxels = nvoxels + length(tmp_mu(:));
-    tmp_mu = tmp_mu(:);
-    tmp_sig = tmp_sig(:);
-    for ii = 1 : length(tmp_mu)
-        dimParams.(pn{1}){ii}.(['mu_' pn{1}]) = tmp_mu(ii);
-        dimParams.(pn{1}){ii}.(['sigma_' pn{1}]) = tmp_sig(ii);
-    end
-end
 
 % The resolution of the different grids, generation grid will only be used when
 mu_grid = cell(nnames, 1);
@@ -164,29 +153,18 @@ for pidx = 1 : length(pointParams)
     nv = nv + 1; 
 end
 
-
-% for pn = cfg.param_names(:)'
-%     mv = mv + 1;
-%     part_p_grid = {};
-%     part_options = options;
-%     part_options.mu = {};
-%     part_options.mu.(pn{1}) = options.mu.(pn{1});
-%     part_p_grid.(pn{1}) = p_grid.(pn{1});
-%     U_part = cpm_precompute(model, part_p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_' pn{1}  '_grid.mat']), true);
-%     for pidx = 1 : length(dimParams.(pn{1}))
-%         y(:, nv) = cpm_generative_grid_process(dimParams.(pn{1}){pidx}, SPM, U_part, nscans, part_options, tmpdir);
-%         xyz(1, nv) = mv;
-%         xyz_def{nv} = dimParams.(pn{1}){pidx};
-%         nv = nv + 1;
-%     end
-% end
-
 U_full = cpm_precompute(model, p_grid, fixedparams, data, fullfile(tmpdir, [simulationname '_simU_full_grid.mat']), true);
 
 mv = mv + 1;
+
 for pidx = 1 : length(fullParams)
     y(:, nv) = cpm_generative_grid_process(fullParams{pidx}, SPM, U_full, nscans, options, tmpdir);
-    xyz(1, nv) = mv;
+    
+    if fullParams{pidx}.mu_tauneg == fullParams{pidx}.mu_taupos
+        xyz(1, nv) = mv + 1;
+    else
+        xyz(1, nv) = mv;
+    end
     xyz_def{nv} =fullParams{pidx};
     nv = nv + 1;
 end
@@ -196,7 +174,6 @@ for nidx = 1 : nnoise
     
     for vidx =  1 : nvoxels
         new_idx = vidx + nvoxels * (nidx - 1);
-    % normrand with 0 variance returns the distributions mean:
         y(:, new_idx) = y(:, vidx) +  normrnd(0, cfg.sim_noise(nidx), [nscans,1]);
         xyz(1,  new_idx) = xyz(1, vidx);
         xyz(2,  new_idx) = nidx;

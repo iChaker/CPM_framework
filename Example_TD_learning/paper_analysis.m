@@ -17,7 +17,7 @@ cd(BASEDIR);
 %% Generative Process:
 % Point generative process 
 
-REDO = false;
+REDO = true;
 
 if ~isfile('simulationfiles/tau_PRFn.mat')  || REDO
 	[VOI, ~] = cpm_simulate_data('tau_simulation_cfg.json');
@@ -26,7 +26,7 @@ else
     VOI = VOI.VOI;
 end
 
-%%
+%
 [prf_onetau] = cpm_simulation_prfs(VOI, 'one_tau_recovery_cfg.json');
 [prf_twotau] =  cpm_simulation_prfs(VOI, 'two_tau_recovery_cfg.json');
 
@@ -46,8 +46,8 @@ PRF = PRF.PRF;
         PRFn{cc} = cpm_estimate(PRF, [], true);
         save([prf_path(1 : end - 4) '_estimated' prf_path(end-3 : end)], 'PRFn')
     else
-        PRFn = load([prf_path(1 : end - 4) '_estimated' prf_path(end-3 : end)]);
-        PRFn{cc}  = PRFn.PRFn;
+        PRFn{cc} = load([prf_path(1 : end - 4) '_estimated' prf_path(end-3 : end)]);
+        PRFn{cc}  = PRFn{cc}.PRFn;
     end
 
     cc = cc + 1;
@@ -61,16 +61,21 @@ simulation_params =VOI.VOI.xyz_def;
 mid = VOI.VOI.xY.XYZmm;
 
 noise = 1;
-nnoise = 2;
+nnoise = 5;
 nvoxels = length(mid) / nnoise;
 
 
 points = find(mid(1, :) == 1 &mid(2, :) == noise);
+
+%% calculate snrs:
+
+simY = VOI.VOI.xY.y;
+
 %%
 
 
 figure; 
-tiles = tiledlayout(4, 4); 
+tiles = tiledlayout(3, 3); 
 inverse_fun = @(x, xmin, xmax) (norminv((x - xmin) ./ (xmax - xmin)));
 
 
@@ -89,7 +94,6 @@ for kk  =points
 end
 %%
 
-%%
 reducedF = zeros(2, length(mid));
 % 
 % reduced_val = -8.125;
@@ -122,50 +126,102 @@ nparams = nvoxels;
 
 [logBF, exceedenceP, comparisons] = deal({}, {}, {});
 % Param idx which generated 0 models:
-nullidx =5;
+nullidx =1;
 % small trick to expand initial index to noise 
 null_voxels =  repmat(nullidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
 [logBF{1}, exceedenceP{1}, comparisons{1}]  = cpm_model_comparison(reducedF, null_voxels, 1);
 
 % Model comparisons for no utility model:
 % Param idx for no-utility - including no learning, i.e. 0 model is included
-for kk = 2 : 4
+for kk = 2 : 3
+    if kk == 2
+        idx = 2;
+    elseif kk == 3
+        idx = 1;
+    end
     no_idx = find(mid(1, :) == kk & mid(2, :) == 1)';
     no_vox =  repmat(no_idx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
-    [logBF{kk}, exceedenceP{kk}, comparisons{kk}]  = cpm_model_comparison(reducedF, no_vox, 1);
+    [logBF{kk}, exceedenceP{kk}, comparisons{kk}]  = cpm_model_comparison(reducedF, no_vox, idx);
 end
 
 
-noutilityidx = find(mid(1, :) == 2 & mid(2, :) == 1)';
-nou_voxels =  repmat(noutilityidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
-[logBF{2}, exceedenceP{2}, comparisons{2}]  = cpm_model_comparison(reducedF, nou_voxels, 2);
-% Model comparisons for no learning model:
-% Param idx for no-learning - including no utility, i.e. 0 model is included
-nolearningidx = find(mid(1, :) == 3 & mid(2, :) == 1)';
-nol_voxels =  repmat(nolearningidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
-[logBF{3}, exceedenceP{3}, comparisons{3}]  = cpm_model_comparison(reducedF, nol_voxels, 3);
 
-% Model comparisons for full model:
-% Param idx for full models excluding all 0 models
-fullidx = find(mid(1, : ) == 4 & mid(2, :) == 1)';
-full_voxels =  repmat(fullidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
-[logBF{4}, exceedenceP{4}, comparisons{4}]  = cpm_model_comparison(reducedF, full_voxels, 4);
+%%
+
+ points = mid(1, mid(2,:) == 1);
+ points = find(points ~=1);
+ params = VOI.VOI.xyz_def(points);
+
+models_grid = cell(3, 3);
+
+for ii = 1 : length(params)
+    
+    if params{ii}.sigma_tauneg == params{ii}.sigma_taupos
+    if params{ii}.mu_tauneg == -4 
+        rw_idx = 1;
+    elseif params{ii}.mu_tauneg == 0
+        rw_idx = 2;
+    elseif    params{ii}.mu_tauneg == 4 
+        rw_idx = 3;
+    end  
+    
+        if params{ii}.mu_taupos == -4 
+        cl_idx = 1;
+    elseif params{ii}.mu_taupos == 0
+        cl_idx = 2;
+    elseif    params{ii}.mu_taupos == 4 
+        cl_idx = 3;
+        end  
+    
+        models_grid{rw_idx, cl_idx} = [models_grid{rw_idx, cl_idx}, points(ii)];
+    end
+end
+%%
+figure; 
+tiles = tiledlayout(3, 3); 
+
+vba_options.DisplayWin = 0;
+
+for c = 1 : 3
+    for r = 1 : 3
+                 nexttile()
+
+         [~, o] = VBA_groupBMC(reducedF(:, models_grid{r, c}), vba_options);
+         bar(o.ep);
+    end
+end
+
+%%
+% noutilityidx = find(mid(1, :) == 2 & mid(2, :) == 1)';
+% nou_voxels =  repmat(noutilityidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+% [logBF{2}, exceedenceP{2}, comparisons{2}]  = cpm_model_comparison(reducedF, nou_voxels, 2);
+% % Model comparisons for no learning model:
+% % Param idx for no-learning - including no utility, i.e. 0 model is included
+% nolearningidx = find(mid(1, :) == 3 & mid(2, :) == 1)';
+% nol_voxels =  repmat(nolearningidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+% [logBF{3}, exceedenceP{3}, comparisons{3}]  = cpm_model_comparison(reducedF, nol_voxels, 3);
+% 
+% % Model comparisons for full model:
+% % Param idx for full models excluding all 0 models
+% fullidx = find(mid(1, : ) == 4 & mid(2, :) == 1)';
+% full_voxels =  repmat(fullidx, 1 , nnoise) +   (0 : nnoise - 1) * nparams;
+% [logBF{4}, exceedenceP{4}, comparisons{4}]  = cpm_model_comparison(reducedF, full_voxels, 4);
 
 %% Result plotting
 fig2 = figure('Color', 'none', 'Units', 'pixels', 'Position', [0, 0, 1600, 1200]);
-ep_titles = {'Null-Model', 'No-utility', 'No-learning', 'Full'};
+ep_titles = {'Null-Model', 'two taus', 'one tau'};
 
 % pre specify colors
 colors = [[0, 0.4470, 0.7410]; [0.8500, 0.3250, 0.0980]; ...
                 [0.9290, 0.6940, 0.1250]; [0.4940, 0.1840, 0.5560]];
 markers = {'o', 'x', 's', 'p'};
 
-voi_noise = 1 : 7;
+voi_noise = 1 : 5;
 % Plot RFX exceedence probabilities
-for ii = 1 : 4
-    subplot(2, 4, ii)
-    bar(voi_noise, exceedenceP{ii});
-    legend({'Null', 'learning', 'utility', 'full'});
+for ii = 1 : 3
+    subplot(2, 3, ii)
+    bar(voi_noise, exceedenceP{ii}');
+    legend({'One Tau', 'Two Tau'});
     title(ep_titles{ii})
     xlabel('Gaussian noise - SD')
     ylabel('Exceendence Probability')
@@ -174,25 +230,30 @@ end
 
 sgtitle( 'Model Comparisons')
 
+
 % Plot Bayes Factor for the different comparisons.
-for ii = 1  : 4
-    subplot(2, 4, ii + 4)
+for ii = 1  : 3
+    subplot(2, 3, ii + 3)
     h = {};
-    for jj = 1 : 3
-        h{jj} = semilogy(voi_noise, exp(squeeze(logBF{ii}(jj, :, :))), markers{comparisons{ii}(jj)}, ... 
+    for jj = 1 
+        if length(size(logBF{ii})) == 2
+        h{jj} = semilogy(voi_noise, (squeeze(logBF{ii}(jj, :))), markers{comparisons{ii}(jj)}, ... 
                        'Color', colors(comparisons{ii}(jj), :));
         hold on
+        else
+                h{jj} = semilogy(voi_noise, (squeeze(logBF{ii}(jj, :, :))), markers{comparisons{ii}(jj)}, ... 
+                       'Color', colors(comparisons{ii}(jj), :));
+        end
     end
     
-    larray = [h{1}; h{2}; h{3}];
+    larray = [h{1}];
     
     legend(larray(1 : length(h{1}): end), ep_titles(comparisons{ii}));
-    xlabel('Bayes Factor')
-    ylabel('Gaussian noise - SD')
+    ylabel('Bayes Factor')
+    xlabel('Gaussian noise - SD')
     
     title(sprintf('Bayes factor in Favor of %s', ep_titles{ii}));
 end
 
-cpm_savefig(fig2, sprintf('results/model_recovery_%s.pdf', 'all'))
+% cpm_savefig(fig2, sprintf('results/model_recovery_%s.pdf', 'all'))
 
-end
