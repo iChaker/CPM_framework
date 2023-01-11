@@ -19,7 +19,7 @@ T0s = response_window.onset;
 old_wealth = response_window.old_wealth;
 TSs = stimulus_onset.onset;
 Ss = stimulus_onset.gFactIncr;
-TRs = new_wealth.onset;
+TRs = new_wealth.onset + 1;
 new_wealth = new_wealth.new_wealth;
 Rs = new_wealth - old_wealth;
 

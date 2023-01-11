@@ -158,13 +158,9 @@ U_full = cpm_precompute(model, p_grid, fixedparams, data, fullfile(tmpdir, [simu
 mv = mv + 1;
 
 for pidx = 1 : length(fullParams)
-    y(:, nv) = cpm_generative_grid_process(fullParams{pidx}, SPM, U_full, nscans, options, tmpdir);
-    
-    if fullParams{pidx}.mu_tauneg == fullParams{pidx}.mu_taupos
-        xyz(1, nv) = mv + 1;
-    else
-        xyz(1, nv) = mv;
-    end
+
+    y(:, nv) = cpm_generative_grid_process(fullParams{pidx}, SPM, U_full, nscans, options, tmpdir);   
+    xyz(1, nv) = mv;
     xyz_def{nv} =fullParams{pidx};
     nv = nv + 1;
 end
@@ -177,6 +173,7 @@ for nidx = 1 : nnoise
         y(:, new_idx) = y(:, vidx) +  normrnd(0, cfg.sim_noise(nidx), [nscans,1]);
         xyz(1,  new_idx) = xyz(1, vidx);
         xyz(2,  new_idx) = nidx;
+        xyz_def{new_idx} = xyz_def{vidx};
     end
 end
 

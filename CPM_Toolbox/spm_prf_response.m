@@ -86,7 +86,7 @@ if nargin < 4
 
     % Neural timeseries. A vector with one entry per microtime bin. The 
     % U.nbins field is injected automatially by spm_prf_analyse
-    nbins = max(U(1).nbins, max(U(end).ind));
+    nbins = U(1).nbins; %max(U(1).nbins, max(U(end).ind));
 
     coords = U(1).gridpoints;
     W = get_response(P,M,U,coords);
@@ -102,10 +102,11 @@ if nargin < 4
         for t = 1:n    
             % Microtime index for this volume
             ind = U(t).ind;  
-
-            resp = U(t).signals1D' .* W;
-            z(ind) = z(ind) + sum(resp);
-
+            
+            if max(ind) < nbins
+                resp = U(t).signals1D' .* W;
+                z(ind) = z(ind) + sum(resp);
+            end
         end
     else
         z = zeros(n,1);

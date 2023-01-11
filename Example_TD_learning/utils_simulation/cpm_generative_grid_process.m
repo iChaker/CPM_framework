@@ -31,7 +31,8 @@ pc = 1;
 for pn = param_names(:)'
     tmpPE.(['lmu_' pn{1}]) = inverse_fun(params.(['mu_' pn{1}]),  tmpPRF.options.cpm.mu.(pn{1})(1), ...
                                                                                    tmpPRF.options.cpm.mu.(pn{1})(2));
-    tmpPE.(['lsigma_' pn{1}]) = params.(['sigma_' pn{1}]); 
+    tmpPE.(['lsigma_' pn{1}]) = inverse_fun(params.(['sigma_' pn{1}]), tmpPRF.options.cpm.sigma.(pn{1})(1), ...
+                                                                                    tmpPRF.options.cpm.sigma.(pn{1})(2)); 
     pc = pc + 1;
 end
 

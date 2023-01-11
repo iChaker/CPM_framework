@@ -100,7 +100,9 @@ end
 zp_slc = zp(cols{:});
 
 if length(plot_names) == 1
-    plot(zp_slc)
+    area(transformers{1}(griddim.(plot_names{1})), zp_slc)
+    xline(pmus.(plot_names{1})(1), 'LineWidth', 1.5, 'LineStyle', '--')
+    xline(pmus.(plot_names{1})(2), 'LineWidth', 1.5, 'LineStyle', '--')
 else
     
         hold on
@@ -116,37 +118,14 @@ else
                             diff(pmus.(plot_names{1})) , ...
                             diff(pmus.(plot_names{2}))];
         
-%         rec_pos(1 : 2 : end) = transformers{1}(rec_pos(1:2:end));
-%         rec_pos(2 : 2 : end) = transformers{2}(rec_pos(2:2:end));
-        
         pplot = pcolor(transformers{1}(griddim.(plot_names{1})), transformers{2}(griddim.(plot_names{2})), zp_slc);
-        %contour(transformers{1}(griddim.(plot_names{1})), transformers{2}(griddim.(plot_names{2})), zp_slc)
         pplot.LineWidth = 0.5;
         pplot.FaceColor = 'interp';
         rectangle('Position', rec_pos, 'EdgeColor','white', 'LineWidth', 1, 'LineStyle', '--');
 
-        t = -pi:0.01:pi;
-%         x_min = true_pe.(['mu_' plot_names{1}]) +  2 * psigs.(plot_names{1})(1) * cos(t);
-%         y_min = true_pe.(['mu_' plot_names{2}]) + 2 * psigs.(plot_names{2})(1) * sin(t);
-%         x_max = true_pe.(['mu_' plot_names{1}]) + 2 *  psigs.(plot_names{1})(2) * cos(t);
-%         y_max = true_pe.(['mu_' plot_names{2}]) + 2 * psigs.(plot_names{2})(2) * sin(t);
-%         x_prior = true_pe.(['mu_' plot_names{1}]) +  2*  true_pe.(['sigma_' plot_names{1}]) * cos(t);
-%         y_prior = true_pe.(['mu_' plot_names{2}]) +   2 * true_pe.(['sigma_' plot_names{2}]) * sin(t);
-%         plot(x_min, y_min)
-%         plot(x_max, y_max)
-%         plot(x_prior, y_prior)
-    
-%         x_post = true_ep.(['mu_' plot_names{1}]) + 2 *  true_ep.(['sigma_' plot_names{1}]) * cos(t);
-%         y_post = true_ep.(['mu_' plot_names{2}]) +  2 *  true_ep.(['sigma_' plot_names{2}]) * sin(t);
-%         
-%         x_post = transformers{1}(x_post);
-%         y_post = transformers{2}(y_post);
-       %plot(x_post, y_post, 'white', 'LineWidth', 2, 'LineStyle', '--')
-        
-
-    pbaspect([1 1 1])
-    %daspect([1 1 1])
-    set(gca, 'LooseInset', get(gca,'TightInset'))
+        pbaspect([1 1 1])
+        %daspect([1 1 1])
+        set(gca, 'LooseInset', get(gca,'TightInset'))
 end
 
 end
