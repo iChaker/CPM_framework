@@ -1,0 +1,10 @@
+{
+ "param_names": ["eta"], 
+  "resolution": 41,
+  "grid_eta": [-2.5, 3.5],
+  "mu_eta": [-0.5, 1.5],
+  "tmpdir": "tmpfiles",
+  "simulationdir": "simulationfiles",
+  "recoveryname": "utility"
+}
+

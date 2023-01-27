@@ -1,0 +1,20 @@
+{
+ "param_names": ["x", "y"], 
+ "point_names": ["x", "y"],
+  "p_resolution": 41,
+  "p_grid_x": [-20, 20],
+  "p_grid_y": [-20, 20],
+  "p_mu_x": [-10.0, 10.0],
+  "p_mu_y": [-10.0, 10.0],
+  "sim_sigma_x":  [0.5, 2.2],
+  "sim_sigma_y": [0.5, 2.2],
+  "sim_mu_x": [-5 , 5],
+  "sim_mu_y": [-5 , 5],
+  "sim_noise":  [0, 0.0288,  0.0091],
+  "point_mu_x" : [],
+  "point_mu_y" : [],
+  "tmpdir": "tmpfiles",
+  "simulationdir": "simulationfiles",
+  "simulationname": "xy"
+}
+

@@ -1,0 +1,12 @@
+{
+ "param_names": ["tau", "eta"], 
+  "resolution": 41,
+  "grid_tau": [-8.1259, 8.1259],
+  "grid_eta": [-2.5, 3.5],
+  "mu_tau": [-4.0, 4.0],
+  "mu_eta": [-0.5, 1.5],
+  "tmpdir": "tmpfiles",
+  "simulationdir": "simulationfiles",
+  "recoveryname": "utility_learn"
+}
+

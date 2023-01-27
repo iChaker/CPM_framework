@@ -2,3 +2,7 @@ simulationfiles/
 results/
 tmpfiles/
 *.m~
+*.asv
+Example_TD_learning/ohbm_figures/figures/
+Example_Visual_PRF/example_data/
+Example_TD_learning/ignore/

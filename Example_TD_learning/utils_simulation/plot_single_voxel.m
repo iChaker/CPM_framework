@@ -7,11 +7,16 @@ arguments
     transformers = {@cpm_logit_inv, []}
     transform_names = {'alpha', 'eta'}
     num_samples = 100
-    posterior = true
+    posterior = 'posterior'
 end
 
-
-Ep = PRF.Ep{idx};
+if islogical(posterior)
+    if posterior
+        posterior = 'posterior';
+    else
+        posterior='prior';
+    end
+end
 
 for ii = 1 : length(transformers)
     if isempty(transformers{ii})
@@ -61,7 +66,17 @@ for ii = 1 : length(param_names)
 end
 
 %%
-[~, z] = cpm_prf_get_ppd(PRF, XYZ, idx, num_samples, posterior);
+
+if strcmp(posterior, 'posterior')
+[~, z] = cpm_prf_get_ppd(PRF, XYZ, idx, num_samples, true);
+elseif strcmp(posterior, 'prior')
+[~, z] = cpm_prf_get_ppd(PRF, XYZ, idx, num_samples, false);
+elseif strcmp(posterior, 'response')
+    z = spm_prf_response(PRF.Ep{idx}, PRF.M, PRF.U, 'get_response', XYZ);
+elseif strcmp(posterior, 'prior_response')
+   z = spm_prf_response(PRF.M.pE{idx}, PRF.M, PRF.U, 'get_response', XYZ);
+
+end
 
 if length(resolution) < 2
     resolution{end + 1} = [];
@@ -119,13 +134,8 @@ else
                             diff(pmus.(plot_names{2}))];
         
         pplot = pcolor(transformers{1}(griddim.(plot_names{1})), transformers{2}(griddim.(plot_names{2})), zp_slc);
-        pplot.LineWidth = 0.5;
-        pplot.FaceColor = 'interp';
         rectangle('Position', rec_pos, 'EdgeColor','white', 'LineWidth', 1, 'LineStyle', '--');
 
-        pbaspect([1 1 1])
-        %daspect([1 1 1])
-        set(gca, 'LooseInset', get(gca,'TightInset'))
 end
 
 end

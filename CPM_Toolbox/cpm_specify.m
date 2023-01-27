@@ -170,7 +170,7 @@ function [sigma_min, sigma_max, prior_sigma_latent] = define_sigma(grid_mu, mode
     end
  
     prior_sigma = (mu_dist / 4) - eps; % numerical stability
-    prior_sigma_latent =  norminv( (prior_sigma - sigma_min) ./ (sigma_max - sigma_min));
+    prior_sigma_latent = 0; %  norminv(((prior_sigma - sigma_min) ./ (sigma_max - sigma_min)) - eps) ;
     
     if ~isfinite(prior_sigma_latent)
         warning('Prior over sigma is nonfinite, setting latent_prior to 0. ')
