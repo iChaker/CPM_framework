@@ -1,0 +1,5 @@
+tmpfiles/
+simulationfiles/
+results/
+*.m~
+*.json~

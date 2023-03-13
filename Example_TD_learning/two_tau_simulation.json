@@ -1,0 +1,20 @@
+{
+ "param_names": ["tauneg", "taupos"], 
+ "point_names": ["alphapos", "alphaneg"],
+  "p_resolution": 41,
+  "p_grid_tauneg": [-8.1259, 8.1259],
+  "p_grid_taupos": [-8.1259, 8.1259],
+  "p_mu_tauneg": [-4.0, 4.0],
+  "p_mu_taupos": [-4.0, 4.0],
+  "sim_sigma_tauneg":  [0.1982, 0.5439],
+  "sim_sigma_taupos": [0.1982, 0.5439],
+  "sim_mu_tauneg": [-1.0986 , 1.0986],
+  "sim_mu_taupos": [-1.0986 , 1.0986],
+  "sim_noise":  [0, 0.9110, 0.2881, 0.1147, 0.0724 ,  0.0288,  0.0091],
+  "point_mu_alphaneg" : [],
+  "point_mu_alphapos" : [],
+  "tmpdir": "tmpfiles",
+  "simulationdir": "simulationfiles",
+  "simulationname": "two_tau"
+}
+

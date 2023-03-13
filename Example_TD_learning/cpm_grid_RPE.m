@@ -2,25 +2,51 @@ function output = cpm_grid_RPE(freeparams,fixedparams,data)
 % Reward prediction error model
 
     % load args
-    
-    
-    try eps = freeparams.eps; catch eps=0; end
-    try eta = freeparams.eta; catch eta=0; end
-    
-    gamma = fixedparams.gamma;
-    Lambda = fixedparams.Lambda;
+try 
+	eta = freeparams.eta;
+catch
+	try
+		eta = fixedparams.eta;
+	catch
+		eta = 0;	
+	end
+end	
+
+try delta = freeparams.eps; catch; delta = 0; end
+
+gamma = fixedparams.gamma;
+lambda = fixedparams.lambda;
+
+try
+    alpha = freeparams.alpha;
+catch
+        try
+            tau = freeparams.tau;
+            alpha = [ logit_inv(tau), logit_inv(tau + delta)];
+        catch
+            try
+                tau_neg = freeparams.tauneg;
+                tau_pos = freeparams.taupos;
+                alpha = [logit_inv(tau_neg), logit_inv(tau_pos)];
+
+            catch
+                try 
+                    alpha_neg = freeparams.alphaneg;
+                    alpha_pos = freeparams.alphapos;
+                    alpha = [alpha_neg, alpha_pos];
+                catch
+                    alpha = 0;
+                end
+            end
+        end
+end
+
     
     C = data.C;
     S = data.S;
-    
-    % define model
-    alpha = freeparams.alpha;
-    %tau = freeparams.tau;
-    %alpha = [ logit_inv(tau - eps), logit_inv(tau + eps)];
 
     
-    
-    RPE = cpm_TD_learning_RPE_generation(alpha ,eta, gamma, Lambda, S, C);
+    RPE = cpm_TD_learning_RPE_generation(alpha ,eta, gamma, lambda, S, C);
 
     RPEs = zeros( [length(RPE)*3 , 1]);
     RPEs(1:3:end) = RPE(:, 2);

@@ -1,0 +1,12 @@
+{
+ "param_names": ["tauneg", "taupos"], 
+  "resolution": 41,
+  "grid_tauneg": [-8.1259, 8.1259],
+  "grid_taupos": [-8.1259, 8.1259],
+  "mu_tauneg": [-4.0, 4.0],
+  "mu_taupos": [-4.0, 4.0],
+  "tmpdir": "tmpfiles",
+  "simulationdir": "simulationfiles",
+  "recoveryname": "twotau"
+}
+

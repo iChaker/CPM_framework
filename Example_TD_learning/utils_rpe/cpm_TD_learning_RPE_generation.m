@@ -79,9 +79,9 @@ for l = 1 : trial_n
     
     Vs(l, :) = squeeze(Xs(l, :, :)) * W;
     
-%     if l < trial_n - 1
-%         RPEs(l + 1) = RPEs(l);
-%     end
+    if l < trial_n - 1
+        RPEs(l + 1) = RPEs(l);
+    end
     
 end
 end

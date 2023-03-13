@@ -1,0 +1,11 @@
+{
+ "param_names": ["x", "y"], 
+  "resolution": 41,
+  "grid_x": [-20, 20],
+  "mu_x": [-10, 10],
+   "grid_y": [-20, 20],
+  "mu_y": [-10, 10],
+  "tmpdir": "tmpfiles",
+  "simulationdir": "simulationfiles",
+  "recoveryname": "xyrec"
+}
