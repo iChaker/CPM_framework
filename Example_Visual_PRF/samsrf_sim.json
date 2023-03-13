@@ -10,7 +10,7 @@
   "sim_sigma_y": [0.5, 2.2],
   "sim_mu_x": [-5 , 5],
   "sim_mu_y": [-5 , 5],
-  "sim_noise":  [0, 0.0288,  0.0091],
+  "sim_noise":  [0, 26.7759, 8.4673, 3.3709, 2.1269, 0.8467, 0.2678],
   "point_mu_x" : [],
   "point_mu_y" : [],
   "tmpdir": "tmpfiles",

@@ -7,6 +7,7 @@ addpath('utils_rpe')
 addpath('utils_simulation')
 addpath(genpath('../CPM_Toolbox'))
 addpath(genpath('../BayespRF-master'))
+addpath(genpath('../Example_TD_learning/'))
 % Adding toolboxes, check that you have the right path here!
 addpath('/mnt/projects/CPM/toolboxes/spm12/')
 BASEDIR = pwd;
@@ -92,13 +93,13 @@ for nidx = noises
     snrs(noise_idx == nidx) = signal_var ./ (noise_var + eps);
     mean_snr(nidx) = mean(10 * log10(snrs(noise_idx == nidx)));
 end
-
+snr_label = round(mean_snr, 2);
 
 %%
 if true
 post_samples = 400;
 %
-noise_level = 2;
+noise_level = 5;
 unq_models = find(model_idx == 1 & noise_idx == noise_level);
 
 % make axes
@@ -109,11 +110,9 @@ fig2 = figure('Color', 'white', 'Units', 'pixels', 'Position', ...
 axis('off')
 hold on;
 
-
 tiledlayout(4, 4,"TileSpacing","tight", "Padding", "tight");
 
-
-for ii = 1 : unq_models
+for ii = unq_models
 
     nexttile()
 
@@ -130,8 +129,15 @@ for ii = 1 : unq_models
         y = generating_params{ii}.mu_y;
         y_sig =generating_params{ii}.sigma_y;
         
-  
-        scatter(x, y,'filled', 'MarkerEdgeColor',[0.5 0.5 0.5], 'MarkerFaceColor',[1 1 1],  'LineWidth',1.0)
+        
+        tmp_title1 = sprintf('\\mu_{x}= %4.2f, \\sigma_{x}= %4.2f', ...
+                                        x, x_sig);
+       
+        tmp_title2 = sprintf('\\mu_{y}= %4.2f, \\sigma_{y}= %4.2f', ...
+                                        y, y_sig);        
+        tmpt =  title({tmp_title1; tmp_title2});
+        tmpt.FontSize = 6;
+        scatter(x, y, 5, 'filled', 'MarkerEdgeColor',[0.5 0.5 0.5], 'MarkerFaceColor',[1 1 1],  'LineWidth',1.0)
         
         tp = -pi:0.01:pi;
         x_post = x + 2 *  x_sig .* cos(tp);
@@ -139,196 +145,46 @@ for ii = 1 : unq_models
         plot(x_post, y_post)
 
 end
+sgtitle({'Parameter Recovery:', ['SNR:', num2str(snr_label(noise_level))]});
 
-end
-
-%% Estimation error
-% Classic
-classic_index = find(model_idx == 1);
-classic_noise = noise_idx(classic_index);
-
-classic_error = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{1}, 1))), length(classic_index));
-
-for cidx = classic_index
-    tmp_gen_vals = spm_vec(cpm_get_true_parameters(PRFn{1}.M.pE{cidx}, PRFn{1}.M, PRFn{1}.U));
-    tmp_gen_vals(1 : 2) = [generating_params{cidx}.mu_tau,  generating_params{cidx}.sigma_tau];
-    classic_error(:, cidx) = tmp_gen_vals - spm_vec(cpm_get_true_parameters(PRFn{1}, cidx));
-end
-
-%% BPA
-cl_lambda = zeros(6, 6);
-
-for cidx = classic_index(classic_noise == 1)
-    cl_lambda = cl_lambda + PRFn{1}.Cp{cidx};
-end
-
-cl_c = pinv(cl_lambda);
-
-%% 
-% Classic
-classic_index = find(model_idx == 1);
-classic_noise = noise_idx(classic_index);
-
-classic_error = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{1}, 1))), length(classic_index));
-
-for cidx = classic_index
-    tmp_gen_vals = spm_vec(cpm_get_true_parameters(PRFn{1}.M.pE{cidx}, PRFn{1}.M, PRFn{1}.U));
-    tmp_gen_vals(1 : 2) = [generating_params{cidx}.mu_tau,  generating_params{cidx}.sigma_tau];
-    classic_error(:, cidx) = tmp_gen_vals - spm_vec(cpm_get_true_parameters(PRFn{1}, cidx));
+cpm_savefig(fig2, 'results/figS1_retino_parameter_recovery.png')
 end
 
 %%
-% Distributional
-dist_index = find(model_idx == 2);
-dist_noise = noise_idx(dist_index);
 
-dist_error = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{2}, 1))), length(dist_index));
-dist_error_alpha = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{2}, 1))) + 2, length(dist_index));
-
-for cidx = dist_index
-    tmp_gen_vals = spm_vec(cpm_get_true_parameters(PRFn{2}.M.pE{cidx}, PRFn{2}.M, PRFn{2}.U));
-    tmp_gen_vals(1 : 2) = [generating_params{cidx}.mu_tauneg,  generating_params{cidx}.mu_taupos];
-    tmp_gen_vals(3 : 4) = [generating_params{cidx}.sigma_tauneg,  generating_params{cidx}.sigma_taupos];
-    dist_error(:, cidx) = spm_vec(cpm_get_true_parameters(PRFn{2}, cidx)) - tmp_gen_vals;
+[trues, preds] = deal({}, {});
+for kk = 1
+    mod_idx = find(model_idx == kk);
+    trues{kk} = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{kk}, 1))), length(mod_idx));
+    preds{kk} = zeros(size(trues{kk}));
     
-    tmp_gen_alpha = zeros(10, 1);
-    tmp_gen_alpha(1 : 2) = cpm_logit_inv([generating_params{cidx}.mu_tauneg,  generating_params{cidx}.mu_taupos]);
-    tmp_gen_alpha(3 : 4) = cpm_logit_inv([generating_params{cidx}.mu_tauneg - generating_params{cidx}.sigma_tauneg, ...
-                                                                  generating_params{cidx}.mu_tauneg + generating_params{cidx}.sigma_tauneg]);
-    tmp_gen_alpha(5 : 6) = cpm_logit_inv([generating_params{cidx}.mu_taupos - generating_params{cidx}.sigma_taupos, ...
-                                                                  generating_params{cidx}.mu_taupos + generating_params{cidx}.sigma_taupos]);
-    tmp_gen_alpha(7 : 10) = tmp_gen_vals(5 : end);
-        
-    tmp_inv_cpm = spm_vec(cpm_get_true_parameters(PRFn{2}, cidx));
-    tmp_inv_alpha = zeros(10, 1);
-    tmp_inv_alpha(1 : 2) = cpm_logit_inv(tmp_inv_cpm(1 : 2));
-    tmp_inv_alpha(3 : 4) = cpm_logit_inv([tmp_inv_cpm(1) -  tmp_inv_cpm(3), tmp_inv_cpm(1) +  tmp_inv_cpm(3)]);
-    tmp_inv_alpha(5 : 6) = cpm_logit_inv([tmp_inv_cpm(2) -  tmp_inv_cpm(4), tmp_inv_cpm(2) +  tmp_inv_cpm(4)]);
-    tmp_inv_alpha(7 : 10) = tmp_inv_cpm(5 : end);
-    dist_error_alpha(:, cidx)  = tmp_inv_alpha - tmp_gen_alpha;
-end
-
-%% Create some plot for errors?!
-
-
-%% Summarize errors for over noise
-dist_mse = zeros(size(dist_error, 1), nnoise);
-dist_alpha_mse = zeros(size(dist_error_alpha, 1), nnoise);
-
-for nidx =  1 : nnoise
-    dist_mse(:, nidx) = mean(dist_error(:, dist_noise == nidx).^2, 2);
-    dist_alpha_mse(:, nidx) = mean(dist_error_alpha(:, dist_noise == nidx).^2, 2);
-end
-
-classic_mse = zeros(size(classic_error, 1), nnoise);
-for nidx =  1 : nnoise
-    classic_mse(:, nidx) = mean(classic_error(:, classic_noise == nidx).^2, 2);
-end
-%%
-figure;
-h = heatmap(sqrt(dist_alpha_mse));
-labels = fieldnames(cpm_get_true_parameters(PRFn{2}, 1));
-%h.YDisplayLabels = labels;
-
-
-%% Recover Tau* 
-alphas_pred = zeros(num_models, 2, nnoise);
-alphas_true = zeros(num_models, 2, nnoise);
-color_idx = zeros(num_models, nnoise);
-for nn = 1 : nnoise
-    tmp_idx = find(noise_idx == nn);
-    cc = 1;
-    for jj = tmp_idx
-        tmp_pred = spm_vec(cpm_get_true_parameters(PRFn{2}, jj));
-        alphas_pred(cc, :, nn) = cpm_logit_inv(tmp_pred(1 : 2));
-        try
-        tmp_true = [generating_params{jj}.mu_tauneg,  generating_params{jj}.mu_taupos];
-        color_idx(cc, nn) = 1;
-        catch
-        tmp_true = [generating_params{jj}.mu_tau,  generating_params{jj}.mu_tau];
-        color_idx(cc, nn) = 2;
+    jj = 1;
+    for cidx = mod_idx
+        tmp_true = cpm_get_true_parameters(PRFn{kk}.M.pE{cidx}, PRFn{kk}.M, PRFn{kk}.U);
+        fn = fieldnames(generating_params{cidx});
+        for fi=1:length(fn)
+            tmp_true.(fn{fi}) = generating_params{cidx}.(fn{fi});
         end
-        alphas_true(cc, :, nn) = cpm_logit_inv(tmp_true(1 : 2));
-        cc = cc + 1;
+        trues{kk}(:, jj) = spm_vec(tmp_true);
+        preds{kk}(:, jj) = spm_vec(cpm_get_true_parameters(PRFn{kk}, cidx));
+    jj = jj + 1;
     end
 end
+% Estimate MSE
+error_fun =  @(true, pred) squeeze(sqrt(mean((true - pred).^2, 2)));
 
-laterality_true = squeeze(alphas_true(:, 1, :)) ./ squeeze(sum(alphas_true, 2));
-laterality_pred = squeeze(alphas_pred(:, 1, :)) ./ squeeze(sum(alphas_pred, 2));
-laterality_error = laterality_true - laterality_pred;
-%% make table
-noise_mat = ones(size(laterality_error)) .* [1 : 7];
+mses{1} = error_fun(reshape(trues{1}, 8, [], nnoise), reshape(preds{1}, 8, [], nnoise));
 %%
-
-figure; 
-subplot(2, 1, 1)
-for bl = unique(laterality_true)'
-    scatter(reshape(noise_mat(laterality_true(:, 1)==bl, 2:end), [], 1), reshape(sqrt(laterality_error(laterality_true(:, 1)==bl, 2:end ).^2), [], 1), 30 * reshape(color_idx(laterality_true(:, 1)==bl, 2:end), [], 1), 'filled')
-    hold on
-end
-xticklabels(mean_snr(2 : end))
-legend({'\tau^*=0.25', '\tau^*=0.50', '\tau^*=0.75'})
-
-subplot(2, 1, 2)
-plot(laterality_true(:, 5), laterality_true(:, 5),  'Color', [0, 0, 0] + 0.5)
-hold on
-
-scatter(laterality_true(:,5), laterality_pred(:, 5), [], color_idx(:,5) ./ 2 , 'filled')
-%% Classic BPA
-figure('Position', [0, 0, 1800, 600]); 
-
-tiledlayout(2, 6, 'TileSpacing', 'tight', 'Padding', 'tight')
-for nn = 2 : 7
-nexttile()
-included = classic_index(classic_noise == nn);
-nincluded = length(included);
-GCM = cell(nincluded,1);
-i = 1;
-for v = included
-    GCM{i}.Cp = PRFn{1}.Cp{v};
-    GCM{i}.Ep = PRFn{1}.Ep{v};
-    GCM{i}.M.pC = PRFn{1}.M.pC{v};
-    GCM{i}.M.pE = PRFn{1}.M.pE{v};
-    i = i + 1;
-end
-classic_BPA = spm_dcm_bpa(GCM);
-
-cl_labels = fieldnames(PRFn{1}.M.pE{1});
-tmp_mat = VBA_cov2corr(classic_BPA.Cp);
-idx = tril(tmp_mat);
-tmp_mat(~idx) = nan;
-t = heatmap(tmp_mat, 'MissingDataColor', 'w', 'GridVisible', 'off', 'MissingDataLabel', ...
-               " ", 'ColorbarVisible', 'off', 'Colormap', colormap('parula'), 'XDisplayLabels', cl_labels, ...
-                'YDisplayLabels', cl_labels, 'FontSize', 8, 'CellLabelFormat', '%0.2f');
-
-t.InnerPosition = [0, 0, 1, 1];
-%% Distributional BPA
+fig4 = figure('Position', [0, 0, 1200, 600]);
+sub_titles = {'Retinotopic Mapping Simulation'};
+for nc = 1
+    subplot(1, 1, nc)
+    labels = fieldnames(cpm_get_true_parameters(PRFn{nc}, 1));
+    labels = strrep(labels, '_', ' ');
+    h = heatmap(round(mses{nc}, 4), 'YDisplayLabels', labels, 'XDisplayLabels', snr_label, 'XLabel', 'SNR', 'YLabel', 'Parameter');
+    title(sub_titles{nc})
 end
 
-for nn = 2 : 7
-nexttile()
-included = dist_index(classic_noise == nn);
-nincluded = length(included);
-GCM = cell(nincluded,1);
-i = 1;
-for v = included
-    GCM{i}.Cp = PRFn{2}.Cp{v};
-    GCM{i}.Ep = PRFn{2}.Ep{v};
-    GCM{i}.M.pC = PRFn{2}.M.pC{v};
-    GCM{i}.M.pE = PRFn{2}.M.pE{v};
-    i = i + 1;
-end
+sgtitle('Parameter Recovery: RMSE')
 
-cl_labels = fieldnames(PRFn{2}.M.pE{1});
-
-dist_BPA = spm_dcm_bpa(GCM);
-tmp_mat = VBA_cov2corr(dist_BPA.Cp);
-idx = tril(tmp_mat);
-tmp_mat(~idx) = nan;
-
-t = heatmap(tmp_mat, 'MissingDataColor', 'w', 'GridVisible', 'off', 'MissingDataLabel', ...
-               " ", 'ColorbarVisible', 'off', 'Colormap', colormap('parula'), 'XDisplayLabels', cl_labels, ...
-                'YDisplayLabels', cl_labels, 'FontSize', 6, 'CellLabelFormat', '%0.2f');
-
-t.InnerPosition = [0, 0, 1, 1];
-end
+cpm_savefig(fig4, 'results/fig_S2_rmse_retino_parameter_recovery.png')
