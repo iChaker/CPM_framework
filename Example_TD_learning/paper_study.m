@@ -13,94 +13,71 @@ BASEDIR = pwd;
 cd('/mnt/projects/CPM/toolboxes/VBA-toolbox/')
 VBA_setup
 cd(BASEDIR);
-%%
-% Generative Process:
-% Point generative process 
-%  Finding the noise variance for the BOLD signal to simulate a given SNR
+%% ======================= Noise levles ========================================
+% Finding the noise variance for the BOLD signal to simulate a given SNR
 %  levels. Previously estimates variance of simulated BOLD signal is 0.0083.
-
-% Formula = SNR = 10 * log10(var_signal / var_noise). 
-% Target SNRs = [20, 10, 2, -2, -10, -20].
-
-var_sig = 0.0083;
-target_snr = [-20, -10, -2, 2, 10, 20];
-t_sd = sqrt(var_sig * 10 .^ (-target_snr / 10)); % Solving for standardeviation
-% Result =     0.9110    0.2881    0.1147    0.0724    0.0288    0.0091
-
-%%
+% var_sig = 0.0083;
+% target_snr = [-20, -10, -2, 2, 10, 20];
+% t_sd = sqrt(var_sig * 10 .^ (-target_snr / 10)); % Solving for standardeviation
+% Result = [0.9110, 0.2881, 0.1147, 0.0724, 0.0288, 0.0091]
+%% ======================= Paths for VOIs, PRFs, etc. ==========================
 REDO = false;
+voi_cfgs = {'one_tau_simulation.json', 'two_tau_simulation.json'};
+voi_names = {'one_tau_simVOI.mat', 'two_tau_simVOI.mat'};
+prf_names = {'onetau_PRFn.mat', 'twotau_PRFn.mat'};
+prf_cfgs = {'one_tau_recovery_cfg.json', 'two_tau_recovery_cfg.json'};
 
-if ~isfile('simulationfiles/one_tau_simVOI.mat')  || REDO
-	[VOI1, ~] = cpm_simulate_data('one_tau_simulation.json');
-else
-    VOI = load('simulationfiles/one_tau_simVOI.mat');
-    VOI1 = VOI.VOI;
-end
+%% ==================== Load VOIs and build them together ======================
+VOI.xY.XYZmm = [];
+VOI.xyz_def = [];
+VOI.xY.y = [];
 
-if ~isfile('simulationfiles/two_tau_simVOI.mat')  || REDO
-	[VOI2, ~] = cpm_simulate_data('two_tau_simulation.json');
-else
-    VOI = load('simulationfiles/two_tau_simVOI.mat');
-    VOI2 = VOI.VOI;
-end
-
-%% Combine VOI
-VOI1.xY.XYZmm(3, :) = 1; % Model indicator
-VOI2.xY.XYZmm(3, :) = 2;
-
-VOI.xY.y = [VOI1.xY.y, VOI2.xY.y];
-VOI.xY.XYZmm = [VOI1.xY.XYZmm, VOI2.xY.XYZmm];
-VOI.xyz_def  = [VOI1.xyz_def; VOI2.xyz_def];
-VOI.y = VOI1.y; % Just to be save;
-
-%% Make PRFs
-if ~isfile('simulationfiles/onetau_PRFn.mat')  || REDO
-    [prf_onetau] = cpm_simulation_prfs(VOI, 'one_tau_recovery_cfg.json');
-else
-    prf_onetau = 'simulationfiles/onetau_PRFn.mat';
-end
-
-if ~isfile('simulationfiles/twotau_PRFn.mat') || REDO
-    [prf_twotau] =  cpm_simulation_prfs(VOI, 'two_tau_recovery_cfg.json');
-else
-    prf_twotau = 'simulationfiles/twotau_PRFn.mat';
-end
-%% Collate PRFs
-cc = 1;
-PRFn = {};
-
-for prf_path = {prf_onetau, prf_twotau}
-
-prf_path = prf_path{1};
-PRF = load(prf_path);
-PRF = PRF.PRF;
-
-    if ~isfile([prf_path(1 : end - 4) '_estimated' prf_path(end - 3 : end)]) || REDO
-        PRFn{cc} = cpm_estimate(PRF, [], true);
-        save([prf_path(1 : end - 4) '_estimated' prf_path(end - 3 : end)], 'PRFn')
+for cc = 1 : 2
+    if ~isfile(fullfile('simulationfiles', voi_names{cc})) || REDO
+        [VOIt, ~] = cpm_simulate_data(voi_cfgs{cc});
     else
-        tmp = load([prf_path(1 : end - 4) '_estimated' prf_path(end - 3 : end)]);
-        PRFn{cc}  =tmp.PRFn{cc};
+        VOIt = load(fullfile('simulationfiles', voi_names{cc}));
+        VOIt = VOIt.VOI;
+    end
+    VOIt.xY.XYZmm(3, :) = cc;
+    VOI.xY.XYZmm = [VOI.xY.XYZmm, VOIt.xY.XYZmm];
+    VOI.xyz_def = [VOI.xyz_def; VOIt.xyz_def];
+    VOI.xY.y = [VOI.xY.y, VOIt.xY.y];
+end
+
+%% ============================= Make PRFs =====================================
+PRFn = {};
+for cc = 1 : 2
+
+    if ~isfile(fullfile('simulationfiles', prf_names{cc}))  || REDO
+        [prf_tmp] = cpm_simulation_prfs(VOI, prf_cfgs{cc});
+    else
+        prf_tmp = fullfile('simulationfiles', prf_names{cc});
     end
 
-    cc = cc + 1;
-end
+    PRF = load(prf_tmp);
+    PRF = PRF.PRF;
 
-%%  Extract indices
-model_idx =VOI.xY.XYZmm(3, :);
+    if ~isfile([prf_tmp(1 : end - 4) '_estimated' prf_tmp(end - 3 : end)]) || REDO
+        PRFn{cc} = cpm_estimate(PRF, [], true);
+        save([prf_tmp(1 : end - 4) '_estimated' prf_tmp(end - 3 : end)], 'PRFn')
+    else
+        tmp = load([prf_tmp(1 : end - 4) '_estimated' prf_tmp(end - 3 : end)]);
+        PRFn{cc}  = tmp.PRFn{cc};
+    end
+end
+%%======================== Extract data ========================================
+model_idx = VOI.xY.XYZmm(3, :);
 noise_idx = VOI.xY.XYZmm(2, :);
 noises = unique(noise_idx); % Noise levels
-nnoise = length(noises);
-num_models = sum(noise_idx == 1); % Number of different models
-generating_params = VOI.xyz_def;
-%%  Calculate SNR
-simY = VOI.xY.y;
+nnoise = length(noises); % Number of noise levels
+nmodels = sum(noise_idx == 1); % Number of different models
+generating_params = VOI.xyz_def; % Parameters used for generation
+simY = VOI.xY.y; % Simulated data
+%%=================== Calculate actual SNR =====================================
 base = 1; % Index, with 0 noise
-signal_var = var(simY(:, noise_idx == base)); % Variance at each voxel
-
- 
-
-snrs = zeros(size(simY, 2), 1); % pre allocate snrs 
+signal_var = var(simY(:, noise_idx == base)); % Voxel wise, signal variance
+snrs = zeros(size(simY, 2), 1); % pre allocate snrs
 mean_snr = zeros(length(noises), 1); % pre - allocate 
 
 for nidx = noises
@@ -109,205 +86,164 @@ for nidx = noises
     mean_snr(nidx) = mean(10 * log10(snrs(noise_idx == nidx)));
 end
 
-%% Add diagonal index
+snr_label = round(mean_snr, 2);
+%% ===================== Extract F values ======================================
+modelF = zeros(2, size(model_idx, 2));
+for midx = 1 : 2
+        modelF(midx, :) = PRFn{midx}.F;
+end
+%% ======================== Model comparison and diagonal idx ===================
 model_idx_ext = model_idx;
-
 for dd = find(model_idx == 2)
-    
     if generating_params{dd}.mu_tauneg == generating_params{dd}.mu_taupos 
         model_idx_ext(dd) = 3;
     end
 end
 
-%% Extract F values and calculate model evidence
-
-modelF = zeros(2, size(model_idx, 2));
-
-for vidx = 1 : size(model_idx, 2)
-    for midx = 1 : size(PRFn, 2)
-        modelF(midx, vidx) = PRFn{midx}.F(vidx);
-    end
-end
-
-[logBF, exceedanceP, comparisons] = deal({}, {}, {});
-
+exceedanceP = {};
 for kk = 1 : 3
-    no_idx = find(model_idx_ext == kk & noise_idx == 1)';
-    no_vox =  repmat(no_idx, 1 , nnoise) +   (0 : nnoise - 1) * length(no_idx);
-    [logBF{kk}, exceedanceP{kk}, comparisons{kk}]  = cpm_model_comparison(modelF, no_vox, (kk > 1) + 1); 
-    % Weird hack, to use k as iterator, but only have two models to compare
-    % against.
+    vox_idx = reshape(find(model_idx_ext == kk), [], nnoise);
+    [~, exceedanceP{kk}, ~]  = cpm_model_comparison(modelF, vox_idx, (kk > 1) + 1); 
+    % Weird hack, to use k as iterator, but only have two models to compare against.
 end
-
-
-%% PLOT exceedance Probabilities
-if false 
+%% ============== PLOT exceedance Probabilities ================================
+if true 
 ep_titles = {'Classical RL', 'Distributional RL', '\tau^- = \tau^+'};
-
-% pre specify colors
-colors = [[0, 0.4470, 0.7410]; [0.8500, 0.3250, 0.0980]; ...
-                [0.9290, 0.6940, 0.1250]; [0.4940, 0.1840, 0.5560]];
-
-fig1 = figure('Color', 'white', 'Units', 'pixels', 'Position', ...
-                    [0, 0, 800, 400]);
-
-tiledlayout(1, 3)
+fig1 = figure('Color', 'white', 'Units', 'pixels', 'Position', [0, 0, 800, 400]);
 % Plot RFX exceedence probabilities
-for ii = 1 : 3
-    nexttile()
-    bar(noises(2:end), exceedanceP{ii}(:, 2:end)');
+for rows = 1 : 3
+    subplot(1, 3, rows)
+    bar(noises(2:end), exceedanceP{rows}(:, 2:end)');
     legend({'Classic RL Model', 'Distributional RL Model'});
-    title(ep_titles{ii});
-    xlabel('SNR');
+    title(ep_titles{rows});
+    xlabel('SNR'); 
     ylabel('Exceedance Probability')
     ylim([0, 1]);
-    xticklabels(round(mean_snr(2:end), 2))
+    xticklabels(snr_label(2 : end))
 end
 
 sgtitle('Model Recovery')
-
-cpm_savefig(fig1, 'results/model_recovery.png')
+cpm_savefig(fig1, 'results/fig1_model_recovery.png')
 end
-%%
+%% ==================== Recovery Plots options =================================
+ppd_samples = 100;
+plot_dimentions = 'response';
+plot_noise = 5;
+pads = 40;
+height_dims = [120, 225];
+row_height = sum(height_dims);
+
+onedim_t  = linspace(PRFn{1}.U(1).grid.tau(1), PRFn{1}.U(1).grid.tau(2), PRFn{1}.U(1).grid.tau(3));
+%% =================== Plot Recovery classical ==================================
 if true
-post_samples = 5000;
-%
-t = -8.1259 : 0.1982 * 2 : 8.1259;
-noise_level = 1;
-unq_models = find(model_idx == 1 & noise_idx == 1);
+voi_idx = reshape(find(model_idx == 1), [], nnoise); 
+sets = reshape(voi_idx(:, plot_noise), 2, 2)';
 
 % make axes
-pad = 40;
-fig_x = 500; fig_y = 800; 
-height_dims = [150, 250, 150, 250] ;
-fig2 = figure('Color', 'white', 'Units', 'pixels', 'Position', ...
-                    [0, 0, fig_x + pad, fig_y + 2 * pad]);
-axis('off')
-hold on;
+fig_x = 500; fig_y = 700;
+fig2 = figure('Color', 'white', 'Units', 'pixels', 'Position',  [0, 0, fig_x + pads, fig_y + 2 * pads]);
 
-
-sets = {[1, 2] + (length(unq_models) * (noise_level - 1)), [3, 4] + (length(unq_models) * (noise_level - 1))};
-
-for ii = 1 :2
-
-    for jj = 1 : 2
-%         cl_axes{ii, jj} = fig_tiles{ii, jj};
-        cl_axes{ii, jj} = axes('Units', 'pixels',  'Position', [0 + (fig_x / 2) * (jj - 1) + pad, ...
-                                                                 fig_y - sum(height_dims(1 : ii + (ii-1))) - pad, ...
-                                                                 fig_x / 2 - pad, ...
-                                                                 height_dims(ii + (ii-1)) - 1.5 * pad]);
-        disp(gca().Position)
+for rows = 1 :2
+    for cols = 1 : 2
+        cl_axes{rows, cols} = axes('Units', 'pixels', 'Position', [0 + (fig_x / 2) * (cols - 1) + pads, ...
+                                                                 fig_y - row_height * (rows - 1) - height_dims(1) - pads, ...
+                                                                 fig_x / 2 - pads, ...
+                                                                 height_dims(1) - 1.5 * pads]);
         hold on;
+        gen_mu_tau = generating_params{sets(rows, cols)}.mu_tau;
+        gen_sigma_tau = generating_params{sets(rows, cols)}.sigma_tau;
 
-        plot_single_voxel(PRFn{1}, sets{ii}(jj), {'tau'}, {[]}, {[]}, post_samples, true)
-        y = normpdf(t, generating_params{sets{ii}(jj)}.mu_tau, generating_params{sets{ii}(jj)}.sigma_tau);
+        plot_single_voxel(PRFn{1}, sets(rows, cols), {'tau'}, {[]}, {[]}, ppd_samples, plot_dimentions)
+        y = normpdf(onedim_t, gen_mu_tau, gen_sigma_tau);
         y = y ./ sum(y);
-        plot(t, y, 'LineWidth', 1.5);
+        
+        plot(onedim_t, y, 'LineWidth', 1.5);
         xlim(PRFn{1}.U(1).grid.tau(1 : 2));
-        tmp_title = sprintf('\\mu_\\tau= %4.2f, \\sigma_\\tau= %4.2f', ...
-            generating_params{sets{ii}(jj)}.mu_tau, ...
-        generating_params{sets{ii}(jj)}.sigma_tau);
-       
+        tmp_title = sprintf('\\mu_\\tau= %4.2f, \\sigma_\\tau= %4.2f', gen_mu_tau, gen_sigma_tau);
         title(tmp_title);
-%         xlabel('\tau')
-xticklabels([])
+        xticklabels([])
         ylabel('Probability')
 
-        dl_axes{ii, jj} = axes('Units', 'pixels',  'Position', [0 + (fig_x / 2) * (jj - 1) + pad, ...
-                                                                 fig_y - sum(height_dims(1 : ii + (ii-1) * 1 + 1)) - 0.25* pad, ...
-                                                                 fig_x / 2 - pad, ...
-                                                                 height_dims(ii + (ii-1) * 1 + 1) - pad ]);
+        dl_axes{rows, cols} = axes('Units', 'pixels',  'Position', [0 + (fig_x / 2) * (cols - 1) + pads, ...
+                                                                 fig_y - rows * row_height - 0.25* pads, ...
+                                                                 fig_x / 2 - pads, ...
+                                                                 height_dims(2) - pads ]);
         hold on;
-        disp(gca().Position)
-        plot_single_voxel(PRFn{2}, sets{ii}(jj), {'tauneg', 'taupos'}, { [], []}, {[], []}, post_samples, true)
+        plot_single_voxel(PRFn{2}, sets(rows, cols), {'tauneg', 'taupos'}, ...
+                                            { [], []}, {[], []}, ppd_samples, plot_dimentions);
+
         xlim(PRFn{2}.U(1).grid.tauneg(1 : 2))
         ylim(PRFn{2}.U(1).grid.tauneg(1 : 2))
         xlabel('\tau^-')
         ylabel('\tau^+')
-        ci_min = generating_params{sets{ii}(jj)}.mu_tau - 2 * generating_params{sets{ii}(jj)}.sigma_tau;
-        ci_max = generating_params{sets{ii}(jj)}.mu_tau + 2 * generating_params{sets{ii}(jj)}.sigma_tau;
-        plot([ci_min, ci_max], [ci_min, ci_max], 'color', 'yellow', 'LineWidth', 1.5);
-        plot(generating_params{sets{ii}(jj)}.mu_tau, generating_params{sets{ii}(jj)}.mu_tau, 'o', 'color', 'white', 'MarkerFaceColor','white')
+        ci = [gen_mu_tau - 2 * gen_sigma_tau, gen_mu_tau + 2 * gen_sigma_tau] ;
+        plot(ci, ci, 'color', 'yellow', 'LineWidth', 1.5);
+        plot(gen_mu_tau, gen_mu_tau, 'o', 'color', 'white', 'MarkerFaceColor','white')
     end
 
 end
 
-for ii = 1 :2
-    for jj = 1 :2
-        cl_axes{ii, jj}.Position(2) = cl_axes{ii, jj}.Position(2) + 2 * pad;
-        dl_axes{ii, jj}.Position(2) = dl_axes{ii, jj}.Position(2) + 2 * pad;
+for rows = 1 :2
+    for cols = 1 :2
+        cl_axes{rows, cols}.Position(2) = cl_axes{rows, cols}.Position(2) + 2 * pads;
+        dl_axes{rows, cols}.Position(2) = dl_axes{rows, cols}.Position(2) + 2 * pads;
     end
 end
 
-sgt = sgtitle('Parameter Recovery: Classic RL');
-
-cpm_savefig(fig2, 'results/parameter_recovery_classic_rl.png')
+sgt = sgtitle({'Parameter Recovery: Classic RL', ['SNR:', num2str(snr_label(plot_noise))]});
+cpm_savefig(fig2, 'results/fig2_parameter_recovery_classic_rl.png')
 end
-%%
-
+%% ============================ Plot recovery Distributional ===================
 if true 
-pad = 45;
-fig_x = 500 * 1.5 ; fig_y = 800 * 1.5; 
-height_dims = [150, 250, 150, 250, 150, 250, 150, 250] .* 0.75; % (800 / 1200) ;
-fig3 = figure('Color', 'white', 'Units', 'pixels', 'Position', ...
-                    [0, 0, fig_x + pad, fig_y + 6 * pad]);
+fig_x = 800 ; fig_y = 4.3 * row_height;
+pads = 35;
+fig3 = figure('Color', 'white', 'Units', 'pixels', 'Position',  [0, 0, fig_x + pads, fig_y + 6 * pads]);
 axis('off')
-hold on;
+normalize_vec = [fig_x + pads, fig_y + 6 * pads, fig_x + pads, fig_y + 6 * pads];
 
-normalize_vec = [fig_x + pad, fig_y + 4 * pad, fig_x + pad, fig_y + 4 * pad];
-unq_models = find(model_idx == 2 & noise_idx == 1);
+voi_idx = reshape(find(model_idx == 2), [], nnoise); 
+sets = reshape(voi_idx(:, plot_noise), 4, 4)';
 
-sets = {[29 : 32] + (noise_level -1) * length(unq_models), ...
-            [33 : 36] + (noise_level -1) * length(unq_models), ...
-            [37 : 40] + (noise_level -1) * length(unq_models), ...
-            [41 : 44] + (noise_level -1) * length(unq_models)};
+for cols = 1 :4
+    for rows = 1 : 4
+        hold on
+        cl_axes{rows, cols} = axes('Units', 'normalized',  'Position', [0 + (fig_x / 4) * (cols - 1) + pads, ...
+                                                                 fig_y - row_height * (rows - 1) - height_dims(1) - 1.5 * pads, ...
+                                                                 fig_x / 4 - pads, ...
+                                                                 height_dims(1) - 1.75 * pads] ./ normalize_vec);
 
-for jj = 1 :4
-
-    for ii = 1 : 4
-        cl_axes{ii, jj} = axes('Units', 'normalized',  'Position', [0 + (fig_x / 4) * (jj - 1) + pad, ...
-                                                                 fig_y - sum(height_dims(1 : ii + (ii-1))) - 1.5 * pad, ...
-                                                                 fig_x / 4 - pad, ...
-                                                                 height_dims(ii + (ii-1)) - 1.75 * pad] ./ normalize_vec);
-
-        plot_single_voxel(PRFn{1}, sets{ii}(jj), {'tau'}, { []}, {[]}, post_samples, 'response')
+        plot_single_voxel(PRFn{1}, sets(rows, cols), {'tau'}, { []}, {[]}, ppd_samples, plot_dimentions)
         
         xlim(PRFn{1}.U(1).grid.tau(1 : 2));
         
+        gen_mu_taupos = generating_params{sets(rows, cols)}.mu_taupos;
+        gen_mu_tauneg = generating_params{sets(rows, cols)}.mu_tauneg;
+        gen_sigma_taupos = generating_params{sets(rows, cols)}.sigma_taupos;
+        gen_sigma_tauneg = generating_params{sets(rows, cols)}.sigma_tauneg;
+
         tmp_title1 = sprintf('\\mu_{\\tau^+}= %4.2f, \\sigma_{\\tau^+}= %4.2f', ...
-        generating_params{sets{ii}(jj)}.mu_taupos, ...
-        generating_params{sets{ii}(jj)}.sigma_taupos);
+                                        gen_mu_taupos, gen_sigma_taupos);
        
         tmp_title2 = sprintf('\\mu_{\\tau^-}= %4.2f, \\sigma_{\\tau^-}= %4.2f', ...
-        generating_params{sets{ii}(jj)}.mu_tauneg, ...
-        generating_params{sets{ii}(jj)}.sigma_tauneg);
-        
-        title({tmp_title1; tmp_title2});
-
+                                        gen_mu_tauneg, gen_sigma_tauneg);        
+        tmpt =  title({tmp_title1; tmp_title2});
+        tmpt.FontSize = 6;
         axis('off')
-    
-        dl_axes{ii, jj} = axes('Units', 'normalized',  'Position', [0 + (fig_x / 4) * (jj - 1) + pad, ...
-                                                                 fig_y - sum(height_dims(1 : ii + (ii-1) * 1 + 1)) - 0.25* pad, ...
-                                                                 fig_x / 4 - pad, ...
-                                                                 height_dims(ii + (ii-1) * 1 + 1) - 0.25 * pad ] ./ normalize_vec);
         
-        plot_single_voxel(PRFn{2}, sets{ii}(jj), {'tauneg', 'taupos'}, { [], []}, {[], []}, post_samples, 'response')
+        dl_axes{rows, cols} = axes('Units', 'normalized',  'Position', [0 + (fig_x / 4) * (cols - 1) + pads, ...
+                                                                 fig_y - rows * row_height - 0.25* pads, ...
+                                                                 fig_x / 4 - pads, ...
+                                                                 height_dims(2) - 0.25 * pads ] ./ normalize_vec);
         
-        hold on
-        x = generating_params{sets{ii}(jj)}.mu_tauneg;
-        x_sig =generating_params{sets{ii}(jj)}.sigma_tauneg;
-        y = generating_params{sets{ii}(jj)}.mu_taupos;
-        y_sig =generating_params{sets{ii}(jj)}.sigma_taupos;
+        plot_single_voxel(PRFn{2}, sets(rows, cols), {'tauneg', 'taupos'}, ...
+                                    { [], []}, {[], []}, ppd_samples, plot_dimentions)
         
-        bla = spm_vec(cpm_get_true_parameters(PRFn{2}, sets{ii}(jj)));
-        disp(bla(1: 4)')
-        disp( [x, y, x_sig, y_sig])
-
-        scatter(x, y,'filled', 'MarkerEdgeColor',[0.5 0.5 0.5], 'MarkerFaceColor',[1 1 1],  'LineWidth',1.0)
+        scatter(gen_mu_tauneg, gen_mu_taupos, ...
+                    'filled', 'MarkerEdgeColor',[0.5 0.5 0.5], 'MarkerFaceColor',[1 1 1],  'LineWidth',1.0)
         
-        tp = -pi:0.01:pi;
-        x_post = x + 2 *  x_sig .* cos(tp);
-        y_post =y +  2 * y_sig .* sin(tp);
+        tp = -pi : 0.01 : pi;
+        x_post = gen_mu_tauneg + 2 * gen_sigma_tauneg .* cos(tp);
+        y_post = gen_mu_taupos + 2 * gen_sigma_taupos .* sin(tp);
         plot(x_post, y_post)
         xlabel('\tau^-')
         ylabel('\tau^+')
@@ -316,212 +252,258 @@ for jj = 1 :4
         ylim(PRFn{2}.U(1).grid.taupos(1 : 2))
     
     end
-
 end
 
-%
-pads_move =  [45; 20; 0; 0]; %0.25; 0.01; 0.0];
+pads_move =  [120; 80; 40; 0] - 15; 
 
-for ii = 1 :4
-    for jj = 1 :4
-        cl_axes{ii, jj}.Position(2) = cl_axes{ii, jj}.Position(2) + (pads_move(ii, 1) + 2.6 * pad) / normalize_vec(2);
-        dl_axes{ii, jj}.Position(2) = dl_axes{ii, jj}.Position(2) + (pads_move(ii, 1) + 1.55 * pad) / normalize_vec(2);
+for rows = 1 :4
+    for cols = 1 :4
+%         cl_axes{rows, cols}.Position(2) = cl_axes{rows, cols}.Position(2) + (pads_move(rows, 1) + 2.6 * pads) / normalize_vec(2);
+%         dl_axes{rows, cols}.Position(2) = dl_axes{rows, cols}.Position(2) + (pads_move(rows, 1) + 1.75 * pads) / normalize_vec(2);
+        cl_axes{rows, cols}.Position(2) = cl_axes{rows, cols}.Position(2) + (40 + pads_move(rows, 1) ) / normalize_vec(2);
+        dl_axes{rows, cols}.Position(2) = dl_axes{rows, cols}.Position(2) + (pads_move(rows, 1) ) / normalize_vec(2);
+
     end
 end
 
-sgtitle('Parameter Recovery: Distributional RL')
+sgtitle({'Parameter Recovery: Distributional RL', ['SNR:', num2str(snr_label(plot_noise))]});
 
-cpm_savefig(fig3, 'results/parameter_recovery_dist_rl.png')
-% Important (but later)
-% Label plots
+cpm_savefig(fig3, 'results/fig3_parameter_recovery_dist_rl.png')
 end
-%% Estimation error
+%% ========================== Estimation error ================================
 % Classic
-classic_index = find(model_idx == 1);
-classic_noise = noise_idx(classic_index);
-
-classic_error = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{1}, 1))), length(classic_index));
-
-for cidx = classic_index
-    tmp_gen_vals = spm_vec(cpm_get_true_parameters(PRFn{1}.M.pE{cidx}, PRFn{1}.M, PRFn{1}.U));
-    tmp_gen_vals(1 : 2) = [generating_params{cidx}.mu_tau,  generating_params{cidx}.sigma_tau];
-    classic_error(:, cidx) = tmp_gen_vals - spm_vec(cpm_get_true_parameters(PRFn{1}, cidx));
-end
-
-%% BPA
-cl_lambda = zeros(6, 6);
-
-for cidx = classic_index(classic_noise == 1)
-    cl_lambda = cl_lambda + PRFn{1}.Cp{cidx};
-end
-
-cl_c = pinv(cl_lambda);
-
-%% 
-% Classic
-classic_index = find(model_idx == 1);
-classic_noise = noise_idx(classic_index);
-
-classic_error = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{1}, 1))), length(classic_index));
-
-for cidx = classic_index
-    tmp_gen_vals = spm_vec(cpm_get_true_parameters(PRFn{1}.M.pE{cidx}, PRFn{1}.M, PRFn{1}.U));
-    tmp_gen_vals(1 : 2) = [generating_params{cidx}.mu_tau,  generating_params{cidx}.sigma_tau];
-    classic_error(:, cidx) = tmp_gen_vals - spm_vec(cpm_get_true_parameters(PRFn{1}, cidx));
-end
-
-%%
-% Distributional
-dist_index = find(model_idx == 2);
-dist_noise = noise_idx(dist_index);
-
-dist_error = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{2}, 1))), length(dist_index));
-dist_error_alpha = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{2}, 1))) + 2, length(dist_index));
-
-for cidx = dist_index
-    tmp_gen_vals = spm_vec(cpm_get_true_parameters(PRFn{2}.M.pE{cidx}, PRFn{2}.M, PRFn{2}.U));
-    tmp_gen_vals(1 : 2) = [generating_params{cidx}.mu_tauneg,  generating_params{cidx}.mu_taupos];
-    tmp_gen_vals(3 : 4) = [generating_params{cidx}.sigma_tauneg,  generating_params{cidx}.sigma_taupos];
-    dist_error(:, cidx) = spm_vec(cpm_get_true_parameters(PRFn{2}, cidx)) - tmp_gen_vals;
+[trues, preds] = deal({}, {});
+for kk = 1 : 2
+    mod_idx = find(model_idx == kk);
+    trues{kk} = zeros(length(spm_vec(cpm_get_true_parameters(PRFn{kk}, 1))), length(mod_idx));
+    preds{kk} = zeros(size(trues{kk}));
     
-    tmp_gen_alpha = zeros(10, 1);
-    tmp_gen_alpha(1 : 2) = cpm_logit_inv([generating_params{cidx}.mu_tauneg,  generating_params{cidx}.mu_taupos]);
-    tmp_gen_alpha(3 : 4) = cpm_logit_inv([generating_params{cidx}.mu_tauneg - generating_params{cidx}.sigma_tauneg, ...
-                                                                  generating_params{cidx}.mu_tauneg + generating_params{cidx}.sigma_tauneg]);
-    tmp_gen_alpha(5 : 6) = cpm_logit_inv([generating_params{cidx}.mu_taupos - generating_params{cidx}.sigma_taupos, ...
-                                                                  generating_params{cidx}.mu_taupos + generating_params{cidx}.sigma_taupos]);
-    tmp_gen_alpha(7 : 10) = tmp_gen_vals(5 : end);
-        
-    tmp_inv_cpm = spm_vec(cpm_get_true_parameters(PRFn{2}, cidx));
-    tmp_inv_alpha = zeros(10, 1);
-    tmp_inv_alpha(1 : 2) = cpm_logit_inv(tmp_inv_cpm(1 : 2));
-    tmp_inv_alpha(3 : 4) = cpm_logit_inv([tmp_inv_cpm(1) -  tmp_inv_cpm(3), tmp_inv_cpm(1) +  tmp_inv_cpm(3)]);
-    tmp_inv_alpha(5 : 6) = cpm_logit_inv([tmp_inv_cpm(2) -  tmp_inv_cpm(4), tmp_inv_cpm(2) +  tmp_inv_cpm(4)]);
-    tmp_inv_alpha(7 : 10) = tmp_inv_cpm(5 : end);
-    dist_error_alpha(:, cidx)  = tmp_inv_alpha - tmp_gen_alpha;
+    jj = 1;
+    for cidx = mod_idx
+        tmp_true = cpm_get_true_parameters(PRFn{kk}.M.pE{cidx}, PRFn{kk}.M, PRFn{kk}.U);
+        fn = fieldnames(generating_params{cidx});
+        for fi=1:length(fn)
+            tmp_true.(fn{fi}) = generating_params{cidx}.(fn{fi});
+        end
+        trues{kk}(:, jj) = spm_vec(tmp_true);
+        preds{kk}(:, jj) = spm_vec(cpm_get_true_parameters(PRFn{kk}, cidx));
+    jj = jj + 1;
+    end
 end
-
-%% Create some plot for errors?!
-
-
-%% Summarize errors for over noise
-dist_mse = zeros(size(dist_error, 1), nnoise);
-dist_alpha_mse = zeros(size(dist_error_alpha, 1), nnoise);
-
-for nidx =  1 : nnoise
-    dist_mse(:, nidx) = mean(dist_error(:, dist_noise == nidx).^2, 2);
-    dist_alpha_mse(:, nidx) = mean(dist_error_alpha(:, dist_noise == nidx).^2, 2);
-end
-
-classic_mse = zeros(size(classic_error, 1), nnoise);
-for nidx =  1 : nnoise
-    classic_mse(:, nidx) = mean(classic_error(:, classic_noise == nidx).^2, 2);
-end
+% Estimate MSE
+error_fun =  @(true, pred) squeeze(sqrt(mean((true - pred).^2, 2)));
+mses{1} = error_fun(reshape(trues{1}, 6, [], nnoise), reshape(preds{1}, 6, [], nnoise));
+mses{2} = error_fun(reshape(trues{2}, 8, [], nnoise), reshape(preds{2}, 8, [], nnoise));
 %%
-figure;
-h = heatmap(sqrt(dist_mse));
-labels = fieldnames(cpm_get_true_parameters(PRFn{2}, 1));
-%h.YDisplayLabels = labels;
+fig4 = figure('Position', [0, 0, 1200, 600]);
+sub_titles = {'Classical RL', 'Distributional RL'};
+for nc = 1 : 2
+    subplot(1, 2, nc)
+    labels = fieldnames(cpm_get_true_parameters(PRFn{nc}, 1));
+    labels = strrep(labels, '_', ' ');
+    h = heatmap(round(mses{nc}, 4), 'YDisplayLabels', labels, 'XDisplayLabels', snr_label, 'XLabel', 'SNR', 'YLabel', 'Parameter');
+    title(sub_titles{nc})
+end
 
+sgtitle('Parameter Recovery: RMSE')
+
+cpm_savefig(fig4, 'results/fig4_rmse_parameter_recovery.png')
 
 %% Recover Tau* 
-alphas_pred = zeros(num_models, 2, nnoise);
-alphas_true = zeros(num_models, 2, nnoise);
-color_idx = zeros(num_models, nnoise);
-for nn = 1 : nnoise
-    tmp_idx = find(noise_idx == nn);
-    cc = 1;
-    for jj = tmp_idx
-        tmp_pred = spm_vec(cpm_get_true_parameters(PRFn{2}, jj));
-        alphas_pred(cc, :, nn) = cpm_logit_inv(tmp_pred(1 : 2));
+alphas_pred = zeros(length(generating_params), 2);
+alphas_true = zeros(length(generating_params), 2);
+
+for nn = 1 : length(generating_params)
+   
+        tmp_pred = spm_vec(cpm_get_true_parameters(PRFn{2}, nn));
+        alphas_pred(nn, :) = cpm_logit_inv(tmp_pred(1 : 2));
         try
-        tmp_true = [generating_params{jj}.mu_tauneg,  generating_params{jj}.mu_taupos];
-        color_idx(cc, nn) = 1;
+        tmp_true = [generating_params{nn}.mu_tauneg,  generating_params{nn}.mu_taupos];
         catch
-        tmp_true = [generating_params{jj}.mu_tau,  generating_params{jj}.mu_tau];
-        color_idx(cc, nn) = 2;
+        tmp_true = [generating_params{nn}.mu_tau,  generating_params{nn}.mu_tau];
         end
-        alphas_true(cc, :, nn) = cpm_logit_inv(tmp_true(1 : 2));
-        cc = cc + 1;
-    end
+        alphas_true(nn, :) = cpm_logit_inv(tmp_true(1 : 2));
 end
-
-laterality_true = squeeze(alphas_true(:, 1, :)) ./ squeeze(sum(alphas_true, 2));
-laterality_pred = squeeze(alphas_pred(:, 1, :)) ./ squeeze(sum(alphas_pred, 2));
+%
+laterality_true = alphas_true(:, 1) ./ sum(alphas_true, 2);
+laterality_pred = alphas_pred(:, 1) ./ sum(alphas_pred, 2);
 laterality_error = laterality_true - laterality_pred;
-%% make table
+%
+laterality_true = [reshape(laterality_true(model_idx==1, :), [], 7); reshape(laterality_true(model_idx==2, :),  [], 7)];
+laterality_pred = [reshape(laterality_pred(model_idx==1, :), [], 7); reshape(laterality_pred(model_idx==2, :),  [], 7)];
+laterality_error = [reshape(laterality_error(model_idx==1, :), [], 7); reshape(laterality_error(model_idx==2, :),  [], 7)];
+%
 noise_mat = ones(size(laterality_error)) .* [1 : 7];
+model_index_res = [reshape(model_idx(model_idx ==1), [], 7); reshape(model_idx(model_idx ==2), [], 7)];
 %%
-
-figure; 
-subplot(2, 1, 1)
+fig5 = figure('Position', [0, 0, 1200, 400]); 
+subplot(1, 2, 1)
 for bl = unique(laterality_true)'
-    scatter(reshape(noise_mat(laterality_true(:, 1)==bl, 2:end), [], 1), reshape(sqrt(laterality_error(laterality_true(:, 1)==bl, 2:end ).^2), [], 1), 30 * reshape(color_idx(laterality_true(:, 1)==bl, 2:end), [], 1), 'filled')
+    scatter(reshape(noise_mat(laterality_true(:, 1)==bl, 2:end), [], 1), reshape(abs(laterality_error(laterality_true(:, 1)==bl, 2:end )), [], 1), ...
+        30 * reshape(model_index_res(laterality_true(:, 1)==bl, 2:end), [], 1), 'filled')
     hold on
 end
+
+xlabel('SNR')
+ylabel('Error')
+
 xticklabels(mean_snr(2 : end))
 legend({'\tau^*=0.25', '\tau^*=0.50', '\tau^*=0.75'})
 
-subplot(2, 1, 2)
-plot(laterality_true(:, 5), laterality_true(:, 5),  'Color', [0, 0, 0] + 0.5)
+title('Absolute error of learning rate asymmetry')
+subplot(1, 2, 2)
+plot(laterality_true(:, plot_noise), laterality_true(:, plot_noise),  'Color', [0, 0, 0] + 0.5)
 hold on
 
-scatter(laterality_true(:,5), laterality_pred(:, 5), [], color_idx(:,5) ./ 2 , 'filled')
+markers = {'o', 'square'};
+for nc = 1 : 2
+    scatter(laterality_true(model_index_res(:, plot_noise) == nc, plot_noise), ...
+                laterality_pred(model_index_res(:, plot_noise) == nc, plot_noise), [], 'filled', 'Marker', markers{nc})
+end
+xlabel('True values')
+ylabel('Estimated values')
+xlim([0.2, 0.8]);
+ylim([0.2, 0.8]);
+title(sprintf('Estimation at SNR %4.2f', snr_label(plot_noise)))
+legend({'', 'Classic RL', 'Distributional RL'}, 'Location','northwest')
+
+cpm_savefig(fig5, 'results/fig5_learning_assymetry_tau.png')
+
 %% Classic BPA
-figure('Position', [0, 0, 1800, 600]); 
+fig5 = figure('Position', [0, 0, 1900, 700]); 
+prf_names = {'Classic RL', 'Distributional RL'};
+tiledlayout(2, 6, 'TileSpacing', 'tight', 'Padding', 'compact')
 
-tiledlayout(2, 6, 'TileSpacing', 'tight', 'Padding', 'tight')
-for nn = 2 : 7
-nexttile()
-included = classic_index(classic_noise == nn);
-nincluded = length(included);
-GCM = cell(nincluded,1);
-i = 1;
-for v = included
-    GCM{i}.Cp = PRFn{1}.Cp{v};
-    GCM{i}.Ep = PRFn{1}.Ep{v};
-    GCM{i}.M.pC = PRFn{1}.M.pC{v};
-    GCM{i}.M.pE = PRFn{1}.M.pE{v};
-    i = i + 1;
-end
-classic_BPA = spm_dcm_bpa(GCM);
+for nc = 1 : 2
+    for nn = 2 : 7
+        nexttile()
+        included =  find(model_idx == nc & noise_idx == nn);
+        nincluded = length(included);
+        GCM = cell(nincluded,1);
+        i = 1;
+        for v = included
+            GCM{i}.Cp = PRFn{nc}.Cp{v};
+            GCM{i}.Ep = PRFn{nc}.Ep{v};
+            GCM{i}.M.pC = PRFn{nc}.M.pC{v};
+            GCM{i}.M.pE = PRFn{nc}.M.pE{v};
+            i = i + 1;
+        end
+        classic_BPA = spm_dcm_bpa(GCM);
+        
+        cl_labels = fieldnames(PRFn{nc}.M.pE{1});
+        cl_labels = strrep(cl_labels, '_', ' ');
+        tmp_mat = VBA_cov2corr(classic_BPA.Cp);
+        idx = tril(tmp_mat);
+        tmp_mat(~idx) = nan;
+        t = heatmap(tmp_mat, 'MissingDataColor', 'w', 'GridVisible', 'off', 'MissingDataLabel', ...
+                       " ", 'ColorbarVisible', 'off', 'Colormap', colormap('parula'), 'XDisplayLabels', cl_labels, ...
+                        'YDisplayLabels', cl_labels, 'FontSize', 10 - 2 *  nc, 'CellLabelFormat', '%0.2f');
+        t.InnerPosition = [0, 0, 1, 1];
 
-cl_labels = fieldnames(PRFn{1}.M.pE{1});
-tmp_mat = VBA_cov2corr(classic_BPA.Cp);
-idx = tril(tmp_mat);
-tmp_mat(~idx) = nan;
-t = heatmap(tmp_mat, 'MissingDataColor', 'w', 'GridVisible', 'off', 'MissingDataLabel', ...
-               " ", 'ColorbarVisible', 'off', 'Colormap', colormap('parula'), 'XDisplayLabels', cl_labels, ...
-                'YDisplayLabels', cl_labels, 'FontSize', 8, 'CellLabelFormat', '%0.2f');
+        if nc == 1
+            title(sprintf('SNR %4.2f', snr_label(nn)));
+        end
+        if nn == 2
+            ylabel(prf_names{nc});
+        end
 
-t.InnerPosition = [0, 0, 1, 1];
-%% Distributional BPA
-end
-
-for nn = 2 : 7
-nexttile()
-included = dist_index(classic_noise == nn);
-nincluded = length(included);
-GCM = cell(nincluded,1);
-i = 1;
-for v = included
-    GCM{i}.Cp = PRFn{2}.Cp{v};
-    GCM{i}.Ep = PRFn{2}.Ep{v};
-    GCM{i}.M.pC = PRFn{2}.M.pC{v};
-    GCM{i}.M.pE = PRFn{2}.M.pE{v};
-    i = i + 1;
+    end
 end
 
-cl_labels = fieldnames(PRFn{2}.M.pE{1});
+sgtitle('Posterior Correlation after BPA')
 
-dist_BPA = spm_dcm_bpa(GCM);
-tmp_mat = VBA_cov2corr(dist_BPA.Cp);
-idx = tril(tmp_mat);
-tmp_mat(~idx) = nan;
+cpm_savefig(fig5, 'results/fig5_posterior_correlation_bpa.png')
 
-t = heatmap(tmp_mat, 'MissingDataColor', 'w', 'GridVisible', 'off', 'MissingDataLabel', ...
-               " ", 'ColorbarVisible', 'off', 'Colormap', colormap('parula'), 'XDisplayLabels', cl_labels, ...
-                'YDisplayLabels', cl_labels, 'FontSize', 6, 'CellLabelFormat', '%0.2f');
-
-t.InnerPosition = [0, 0, 1, 1];
+%% Predicted Y
+predYs = {};
+for nc =  1 : 2
+    predYs{nc} = zeros(size(PRFn{nc}.Y.y));
+    for vx = 1 : nnoise * nmodels
+        predYs{nc}(:, vx) = spm_prf_response(PRFn{nc}.Ep{vx}, PRFn{nc}.M, PRFn{nc}.U);
+    end
 end
+
+%% Simulated HRF accuracy RMSE / R2
+
+fits_r2 = zeros(2, nmodels * nnoise);
+fits_mse = zeros(2, nmodels * nnoise);
+
+for nc = 1 : 2
+    for vx = 1 : nnoise * nmodels
+        fits_r2(nc, vx) = VBA_r2(predYs{nc}(:, vx), simY(:, vx));
+        fits_mse(nc, vx) = sqrt(mean((simY(:, vx) - predYs{nc}(:, vx)).^2));
+    end
+end
+
+%% Plot classical RL
+
+fig6 = figure('Position', [0, 0, 1200, 500]);
+
+for nc = 1 : 2
+    subplot(2, 2, nc)
+    tmp_r2 = (fits_r2(:, model_idx==nc));
+    tmp_r2 =  [tmp_r2(1, :), tmp_r2(2, :)];
+    model_g =[zeros(1, sum(model_idx==nc)), zeros(1, sum(model_idx==nc)) + 1];
+    noise_g = [noise_idx(model_idx==nc), noise_idx(model_idx==nc)];
+
+boxchart(noise_g(noise_g > 1) - 2, tmp_r2(noise_g > 1), 'GroupByColor', model_g(noise_g > 1))
+legend({'Classic RL', 'Distrubtional RL'}, 'Location', 'SouthEast')
+xticks(0 : 5)
+xticklabels(snr_label(2 : 7))
+xlabel('SNR')
+ylabel('R^2')
+title('Generative Process:', prf_names{nc})
+end
+
+subplot(2, 2, 3)
+
+% Fits of interest: At Model SNR largest difference
+tmp_idx =  find(model_idx == 2 & noise_idx == plot_noise);
+[~, max_diff] = max(diff(fits_r2(:, tmp_idx)));
+max_diff = 6;
+
+hold on
+t = (0 : size(simY, 1) - 1) * 0.592;
+lh  = plot(t, simY(:, tmp_idx(max_diff)), 'Color', 'black');
+lh.Color(4) = 0.1;
+lh2 = plot(t, predYs{1}(:, tmp_idx(max_diff)), 'LineStyle',':', 'LineWidth', 1.5);
+lh3 = plot(t, predYs{2}(:, tmp_idx(max_diff)), 'Color', 'black');
+
+lh2.Color  = [ 0, 0.4470, 0.7410, 1];
+lh3.Color = [0.8500    0.3250    0.0980, 1];
+
+xlabel('time')
+ylabel('signal, a.u.')
+title('Simulated and Recovered Signals', sprintf('SNR %4.2f', snr_label(plot_noise)));
+legend({'Simulated', 'Classic RL', 'Distributional RL'}, 'Location', 'SouthEast')
+
+subplot(2, 2, 4)
+hold on
+
+sc1 = scatter(simY(:, tmp_idx(max_diff)), predYs{1}(:, tmp_idx(max_diff)), 0.8, 'filled');
+sc2 = scatter(simY(:, tmp_idx(max_diff)), predYs{2}(:, tmp_idx(max_diff)), 0.8, 'filled');
+l2  = lsline;
+
+l2(1).Color = sc1.CData;
+l2(2).Color = sc2.CData;
+
+xlim([min(simY(:, tmp_idx(max_diff))), max(simY(:, tmp_idx(max_diff)))])
+ylim([ min(predYs{2}(:, tmp_idx(max_diff))), max(predYs{2}(:, tmp_idx(max_diff)))])
+
+ylabel('Simulated')
+xlabel('Recovered')
+rf = refline(0.5, 0);
+rf.Color = [0.2, 0.2, 0.2, 0.4];
+
+title_r2 = round(fits_r2(:, tmp_idx(max_diff)), 2);
+
+legend({['Classic RL (R^2 = ', num2str(round(title_r2(1), 2)) ')'], ...
+             ['Distributional RL (R^2 = ', num2str(round(title_r2(2), 2)) ')']}, 'Location', 'SouthEast')
+
+disp(generating_params{tmp_idx(max_diff)})
+
+title('Simulated vs Recovered')
+
+sgtitle('Classical Model fit');
+
+cpm_savefig(fig6, 'results/fig6_signal_recovery_r2.png')
