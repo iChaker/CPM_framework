@@ -4,7 +4,7 @@ function cpm_savefig(fig, fname)
 
 if strcmp(extension, '.png')
     
-    print(fig, fname, '-dpng', '-r600');
+    print(fig, fname,'-dpng', '-r700', '-painters');
 
 elseif strcmp(extension, '.pdf')
     
